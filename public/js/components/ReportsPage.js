@@ -15,29 +15,29 @@ export class ReportsPage {
   }
 
   async render() {
-    this.container.innerHTML = '<div class="text-center mt-lg" style="color:var(--text-muted)">Raporlar yükleniyor...</div>';
+    this.container.innerHTML = '<div class="loading">Raporlar yükleniyor...</div>';
     try {
       this.container.innerHTML = this.renderPage();
       this.bindEvents();
       this.loadTab('yearly');
     } catch (err) {
-      this.container.innerHTML = `<div class="empty-state"><p>Hata: ${err.message}</p></div>`;
+      this.container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📊</div><p class="empty-state-text">Hata: ${err.message}</p></div>`;
     }
   }
 
   renderPage() {
     return `
       <div class="section-header">
-        <h2 class="section-title">📊 Raporlar</h2>
+        <h2 class="section-title">Raporlar</h2>
       </div>
 
-      <div style="display:flex;gap:var(--space-sm);margin-bottom:var(--space-md);flex-wrap:wrap">
-        <button class="btn tab-btn active" data-tab="yearly" style="background:var(--accent-primary);color:white">📅 Yıllık Karşılaştırma</button>
-        <button class="btn btn-ghost tab-btn" data-tab="tax">🧾 Vergi Özeti</button>
-        <button class="btn btn-ghost tab-btn" data-tab="inflation">📈 Enflasyon</button>
-        <button class="btn btn-ghost tab-btn" data-tab="pdf">📄 PDF İndir</button>
-        <button class="btn btn-ghost tab-btn" data-tab="snapshots">📸 Snapshotlar</button>
-        <button class="btn btn-ghost tab-btn" data-tab="actions">⚡ Aksiyonlar</button>
+      <div class="tab-bar">
+        <button class="tab-btn active" data-tab="yearly">📅 Yıllık</button>
+        <button class="tab-btn" data-tab="tax">🧾 Vergi</button>
+        <button class="tab-btn" data-tab="inflation">📈 Enflasyon</button>
+        <button class="tab-btn" data-tab="pdf">📄 PDF</button>
+        <button class="tab-btn" data-tab="snapshots">📸 Snapshot</button>
+        <button class="tab-btn" data-tab="actions">⚡ Aksiyonlar</button>
       </div>
 
       <div id="tabContent"></div>
@@ -46,8 +46,7 @@ export class ReportsPage {
 
   async loadTab(tab) {
     const content = this.container.querySelector('#tabContent');
-    content.innerHTML = '<div class="text-center" style="color:var(--text-muted);padding:var(--space-lg)">Yükleniyor...</div>';
-
+    content.innerHTML = '<div class="loading">Yükleniyor...</div>';
     try {
       switch (tab) {
         case 'yearly': content.innerHTML = await this.renderYearly(); break;
@@ -57,57 +56,63 @@ export class ReportsPage {
         case 'snapshots': content.innerHTML = await this.renderSnapshots(); this.bindSnapshots(); break;
         case 'actions': content.innerHTML = await this.renderActions(); break;
       }
-    } catch (err) { content.innerHTML = `<p style="color:var(--accent-danger)">Hata: ${err.message}</p>`; }
+    } catch (err) {
+      content.innerHTML = `<div class="empty-state"><p class="empty-state-text">Hata: ${err.message}</p></div>`;
+    }
   }
 
   async renderYearly() {
     const data = await api.getYearlyComparison(this.year - 1, this.year);
-    const { year1, year2, categoryComparison, monthlyComparison } = data;
+    const { year1, year2, categoryComparison } = data;
 
     return `
       <div class="card fade-in">
-        <h3 style="font-weight:700;margin-bottom:var(--space-md)">${year1.year} vs ${year2.year}</h3>
-        <div class="stats-grid" style="margin-bottom:var(--space-md)">
-          <div class="stat-card">
-            <div class="stat-label">${year1.year} Gelir</div>
-            <div class="stat-value" style="font-size:var(--font-md)">${formatCurrency(year1.totalIncome)}</div>
+        <div class="card-header">
+          <h3 class="card-title">${year1.year} vs ${year2.year}</h3>
+        </div>
+        <div class="stats-grid mb-md">
+          <div class="card stat-card income">
+            <p class="card-title">${year1.year} Gelir</p>
+            <p class="card-value positive">${formatCurrency(year1.totalIncome)}</p>
           </div>
-          <div class="stat-card">
-            <div class="stat-label">${year2.year} Gelir</div>
-            <div class="stat-value" style="font-size:var(--font-md)">${formatCurrency(year2.totalIncome)}</div>
+          <div class="card stat-card income">
+            <p class="card-title">${year2.year} Gelir</p>
+            <p class="card-value positive">${formatCurrency(year2.totalIncome)}</p>
           </div>
-          <div class="stat-card">
-            <div class="stat-label">${year1.year} Gider</div>
-            <div class="stat-value" style="font-size:var(--font-md)">${formatCurrency(year1.totalExpense)}</div>
+          <div class="card stat-card expense">
+            <p class="card-title">${year1.year} Gider</p>
+            <p class="card-value negative">${formatCurrency(year1.totalExpense)}</p>
           </div>
-          <div class="stat-card">
-            <div class="stat-label">${year2.year} Gider</div>
-            <div class="stat-value" style="font-size:var(--font-md)">${formatCurrency(year2.totalExpense)}</div>
+          <div class="card stat-card expense">
+            <p class="card-title">${year2.year} Gider</p>
+            <p class="card-value negative">${formatCurrency(year2.totalExpense)}</p>
           </div>
         </div>
 
         ${categoryComparison.length > 0 ? `
-          <h4 style="font-size:var(--font-sm);color:var(--text-secondary);margin:var(--space-md) 0 var(--space-sm)">Kategori Karşılaştırma</h4>
-          <table style="width:100%;font-size:var(--font-sm);border-collapse:collapse">
-            <thead><tr style="border-bottom:1px solid var(--border-color)">
-              <th style="text-align:left;padding:var(--space-xs)">Kategori</th>
-              <th style="text-align:right;padding:var(--space-xs)">${year1.year}</th>
-              <th style="text-align:right;padding:var(--space-xs)">${year2.year}</th>
-              <th style="text-align:right;padding:var(--space-xs)">Fark</th>
-            </tr></thead>
-            <tbody>
-              ${categoryComparison.slice(0, 12).map(c => `
-                <tr style="border-bottom:1px solid var(--border-color)">
-                  <td style="padding:var(--space-xs)">${c.category}</td>
-                  <td style="text-align:right;padding:var(--space-xs)">${formatCurrency(c.year1)}</td>
-                  <td style="text-align:right;padding:var(--space-xs)">${formatCurrency(c.year2)}</td>
-                  <td style="text-align:right;padding:var(--space-xs);color:${c.delta > 0 ? 'var(--accent-danger)' : 'var(--accent-primary)'};font-weight:600">
-                    ${c.delta >= 0 ? '+' : ''}${formatCurrency(c.delta)}${c.deltaPercent !== null ? ` (%${c.deltaPercent})` : ''}
-                  </td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
+          <h4 class="card-title mb-sm">Kategori Karşılaştırma</h4>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead><tr>
+                <th>Kategori</th>
+                <th class="text-right">${year1.year}</th>
+                <th class="text-right">${year2.year}</th>
+                <th class="text-right">Fark</th>
+              </tr></thead>
+              <tbody>
+                ${categoryComparison.slice(0, 12).map(c => `
+                  <tr>
+                    <td>${c.category}</td>
+                    <td class="text-right">${formatCurrency(c.year1)}</td>
+                    <td class="text-right">${formatCurrency(c.year2)}</td>
+                    <td class="text-right ${c.delta > 0 ? 'amount-expense' : 'amount-income'}">
+                      ${c.delta >= 0 ? '+' : ''}${formatCurrency(c.delta)}${c.deltaPercent !== null ? ` (%${c.deltaPercent})` : ''}
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
         ` : ''}
       </div>
     `;
@@ -117,22 +122,42 @@ export class ReportsPage {
     const data = await api.getTaxSummary(this.year);
     return `
       <div class="card fade-in">
-        <h3 style="font-weight:700;margin-bottom:var(--space-md)">🧾 ${data.year} Vergi Hazırlık Özeti</h3>
-        <div class="stats-grid" style="margin-bottom:var(--space-md)">
-          <div class="stat-card"><div class="stat-value" style="font-size:var(--font-md)">${formatCurrency(data.totalIncome)}</div><div class="stat-label">Toplam Gelir</div></div>
-          <div class="stat-card"><div class="stat-value" style="font-size:var(--font-md)">${formatCurrency(data.totalExpense)}</div><div class="stat-label">Toplam Gider</div></div>
-          <div class="stat-card"><div class="stat-value" style="font-size:var(--font-md)">${formatCurrency(data.net)}</div><div class="stat-label">Net</div></div>
-          <div class="stat-card"><div class="stat-value" style="font-size:var(--font-md)">${data.transactionCount}</div><div class="stat-label">İşlem Sayısı</div></div>
+        <div class="card-header">
+          <h3 class="card-title">${data.year} Vergi Hazırlık Özeti</h3>
+        </div>
+        <div class="stats-grid mb-md">
+          <div class="card stat-card income">
+            <p class="card-title">Toplam Gelir</p>
+            <p class="card-value">${formatCurrency(data.totalIncome)}</p>
+          </div>
+          <div class="card stat-card expense">
+            <p class="card-title">Toplam Gider</p>
+            <p class="card-value">${formatCurrency(data.totalExpense)}</p>
+          </div>
+          <div class="card stat-card net">
+            <p class="card-title">Net</p>
+            <p class="card-value">${formatCurrency(data.net)}</p>
+          </div>
+          <div class="card stat-card">
+            <p class="card-title">İşlem Sayısı</p>
+            <p class="card-value">${data.transactionCount}</p>
+          </div>
         </div>
         ${data.potentialDeductibles.length > 0 ? `
-          <h4 style="font-size:var(--font-sm);color:var(--text-secondary);margin-bottom:var(--space-sm)">Potansiyel İndirimler</h4>
-          ${data.potentialDeductibles.map(d => `
-            <div style="display:flex;justify-content:space-between;padding:var(--space-xs) 0;font-size:var(--font-sm);border-bottom:1px solid var(--border-color)">
-              <span>${d.category}</span><span style="font-weight:600">${formatCurrency(d.amount)}</span>
-            </div>
-          `).join('')}
-          <div style="margin-top:var(--space-sm);font-size:var(--font-sm);font-weight:700">Toplam İndirim: ${formatCurrency(data.totalDeductible)}</div>
-        ` : '<p style="color:var(--text-muted);font-size:var(--font-sm)">İndirim kapsamında harcama bulunamadı.</p>'}
+          <h4 class="card-title mb-sm">Potansiyel İndirimler</h4>
+          <div class="recent-list">
+            ${data.potentialDeductibles.map(d => `
+              <div class="recent-item">
+                <div class="recent-info"><div class="recent-desc">${d.category}</div></div>
+                <div class="recent-amount">${formatCurrency(d.amount)}</div>
+              </div>
+            `).join('')}
+          </div>
+          <div class="card-header mt-sm">
+            <span class="card-title">Toplam İndirim</span>
+            <span class="card-value positive">${formatCurrency(data.totalDeductible)}</span>
+          </div>
+        ` : '<p class="card-subtitle">İndirim kapsamında harcama bulunamadı.</p>'}
       </div>
     `;
   }
@@ -140,17 +165,25 @@ export class ReportsPage {
   renderInflation() {
     return `
       <div class="card fade-in">
-        <h3 style="font-weight:700;margin-bottom:var(--space-md)">📈 Enflasyon Hesaplayıcı</h3>
-        <div style="display:flex;gap:var(--space-md);flex-wrap:wrap;align-items:flex-end">
-          <div><label style="font-size:var(--font-xs);color:var(--text-muted);display:block;margin-bottom:4px">Tutar (₺)</label>
-            <input type="number" id="infAmount" value="100000" style="padding:var(--space-sm);border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text-primary);width:150px"></div>
-          <div><label style="font-size:var(--font-xs);color:var(--text-muted);display:block;margin-bottom:4px">Yıl</label>
-            <input type="number" id="infYears" value="3" min="1" max="20" style="padding:var(--space-sm);border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text-primary);width:80px"></div>
-          <div><label style="font-size:var(--font-xs);color:var(--text-muted);display:block;margin-bottom:4px">Yıllık Enf. (%)</label>
-            <input type="number" id="infRate" value="25" min="1" max="200" style="padding:var(--space-sm);border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text-primary);width:80px"></div>
-          <button class="btn" id="btnCalcInf" style="background:var(--accent-primary);color:white">Hesapla</button>
+        <div class="card-header">
+          <h3 class="card-title">Enflasyon Hesaplayıcı</h3>
         </div>
-        <div id="infResult" style="margin-top:var(--space-md)"></div>
+        <div class="inline-form mb-md">
+          <div class="field">
+            <label>Tutar (₺)</label>
+            <input type="number" id="infAmount" value="100000">
+          </div>
+          <div class="field">
+            <label>Yıl</label>
+            <input type="number" id="infYears" value="3" min="1" max="20">
+          </div>
+          <div class="field">
+            <label>Yıllık Enflasyon (%)</label>
+            <input type="number" id="infRate" value="25" min="1" max="200">
+          </div>
+          <button class="btn btn-primary" id="btnCalcInf">Hesapla</button>
+        </div>
+        <div id="infResult"></div>
       </div>
     `;
   }
@@ -166,29 +199,46 @@ export class ReportsPage {
           api.postInflationSalary({ monthlySalary: amount, years })
         ]);
         this.container.querySelector('#infResult').innerHTML = `
-          <div class="stats-grid" style="margin-bottom:var(--space-md)">
-            <div class="stat-card"><div class="stat-value" style="font-size:var(--font-md)">${formatCurrency(fv.futureEquivalent)}</div><div class="stat-label">Gelecek eşdeğeri</div></div>
-            <div class="stat-card"><div class="stat-value" style="font-size:var(--font-md);color:var(--accent-danger)">${formatCurrency(fv.purchasingPower)}</div><div class="stat-label">Satın alma gücü</div></div>
-            <div class="stat-card"><div class="stat-value" style="font-size:var(--font-md);color:var(--accent-danger)">-%${fv.erosionPercent}</div><div class="stat-label">Değer kaybı</div></div>
+          <div class="stats-grid mb-md">
+            <div class="card stat-card">
+              <p class="card-title">Gelecek Eşdeğeri</p>
+              <p class="card-value">${formatCurrency(fv.futureEquivalent)}</p>
+            </div>
+            <div class="card stat-card expense">
+              <p class="card-title">Satın Alma Gücü</p>
+              <p class="card-value negative">${formatCurrency(fv.purchasingPower)}</p>
+            </div>
+            <div class="card stat-card expense">
+              <p class="card-title">Değer Kaybı</p>
+              <p class="card-value negative">-%${fv.erosionPercent}</p>
+            </div>
           </div>
-          <p style="font-size:var(--font-sm);color:var(--text-secondary)">${fv.message}</p>
+          <p class="card-subtitle">${fv.message}</p>
         `;
-      } catch (err) { this.container.querySelector('#infResult').innerHTML = `<p style="color:var(--accent-danger)">${err.message}</p>`; }
+      } catch (err) {
+        this.container.querySelector('#infResult').innerHTML = `<p class="card-subtitle" style="color:var(--accent-danger)">${err.message}</p>`;
+      }
     });
   }
 
   renderPDF() {
     return `
       <div class="card fade-in">
-        <h3 style="font-weight:700;margin-bottom:var(--space-md)">📄 PDF Rapor İndir</h3>
-        <div style="display:flex;gap:var(--space-md);align-items:flex-end">
-          <div><label style="font-size:var(--font-xs);color:var(--text-muted);display:block;margin-bottom:4px">Yıl</label>
-            <input type="number" id="pdfYear" value="${this.year}" style="padding:var(--space-sm);border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text-primary);width:100px"></div>
-          <div><label style="font-size:var(--font-xs);color:var(--text-muted);display:block;margin-bottom:4px">Ay</label>
-            <select id="pdfMonth" style="padding:var(--space-sm);border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text-primary)">
+        <div class="card-header">
+          <h3 class="card-title">PDF Rapor İndir</h3>
+        </div>
+        <div class="inline-form">
+          <div class="field">
+            <label>Yıl</label>
+            <input type="number" id="pdfYear" value="${this.year}">
+          </div>
+          <div class="field">
+            <label>Ay</label>
+            <select id="pdfMonth" class="form-select">
               ${MONTH_NAMES.map((m, i) => `<option value="${i + 1}" ${i + 1 === this.month ? 'selected' : ''}>${m}</option>`).join('')}
-            </select></div>
-          <a class="btn" id="btnDownloadPdf" href="/api/reports/pdf?year=${this.year}&month=${this.month}" target="_blank" style="background:var(--accent-primary);color:white;text-decoration:none">📥 PDF İndir</a>
+            </select>
+          </div>
+          <a class="btn btn-primary" id="btnDownloadPdf" href="/api/reports/pdf?year=${this.year}&month=${this.month}" target="_blank" style="text-decoration:none">📥 PDF İndir</a>
         </div>
       </div>
     `;
@@ -207,34 +257,40 @@ export class ReportsPage {
     const snapshots = await api.getSnapshots();
     return `
       <div class="card fade-in">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-md)">
-          <h3 style="font-weight:700">📸 Aylık Snapshotlar (${snapshots.length})</h3>
-          <button class="btn" id="btnGenSnapshots" style="background:var(--accent-primary);color:white">🔄 Eksikleri Oluştur</button>
+        <div class="card-header">
+          <h3 class="card-title">Aylık Snapshotlar (${snapshots.length})</h3>
+          <button class="btn btn-primary btn-sm" id="btnGenSnapshots">🔄 Eksikleri Oluştur</button>
         </div>
         ${snapshots.length > 0 ? `
-          <table style="width:100%;font-size:var(--font-sm);border-collapse:collapse">
-            <thead><tr style="border-bottom:1px solid var(--border-color)">
-              <th style="text-align:left;padding:var(--space-xs)">Dönem</th>
-              <th style="text-align:right;padding:var(--space-xs)">Gelir</th>
-              <th style="text-align:right;padding:var(--space-xs)">Gider</th>
-              <th style="text-align:right;padding:var(--space-xs)">Net</th>
-              <th style="text-align:right;padding:var(--space-xs)">Borç</th>
-              <th style="text-align:center;padding:var(--space-xs)">Risk</th>
-            </tr></thead>
-            <tbody>
-              ${snapshots.sort((a, b) => (b.year * 100 + b.month) - (a.year * 100 + a.month)).map(s => `
-                <tr style="border-bottom:1px solid var(--border-color)">
-                  <td style="padding:var(--space-xs)">${MONTH_NAMES[s.month - 1]} ${s.year}</td>
-                  <td style="text-align:right;padding:var(--space-xs)">${formatCurrency(s.income)}</td>
-                  <td style="text-align:right;padding:var(--space-xs)">${formatCurrency(s.expense)}</td>
-                  <td style="text-align:right;padding:var(--space-xs);color:${s.net >= 0 ? 'var(--accent-primary)' : 'var(--accent-danger)'}">${formatCurrency(s.net)}</td>
-                  <td style="text-align:right;padding:var(--space-xs)">${formatCurrency(s.totalDebt)}</td>
-                  <td style="text-align:center;padding:var(--space-xs)">${s.riskLabel}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        ` : '<p style="color:var(--text-muted)">Henüz snapshot yok. "Eksikleri Oluştur" butonuna tıklayın.</p>'}
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead><tr>
+                <th>Dönem</th>
+                <th class="text-right">Gelir</th>
+                <th class="text-right">Gider</th>
+                <th class="text-right">Net</th>
+                <th class="text-right">Borç</th>
+                <th class="text-center">Risk</th>
+              </tr></thead>
+              <tbody>
+                ${snapshots.sort((a, b) => (b.year * 100 + b.month) - (a.year * 100 + a.month)).map(s => `
+                  <tr>
+                    <td>${MONTH_NAMES[s.month - 1]} ${s.year}</td>
+                    <td class="text-right">${formatCurrency(s.income)}</td>
+                    <td class="text-right">${formatCurrency(s.expense)}</td>
+                    <td class="text-right ${s.net >= 0 ? 'amount-income' : 'amount-expense'}">${formatCurrency(s.net)}</td>
+                    <td class="text-right">${formatCurrency(s.totalDebt)}</td>
+                    <td class="text-center"><span class="badge badge-warning">${s.riskLabel}</span></td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        ` : `
+          <div class="empty-state">
+            <p class="empty-state-text">Henüz snapshot yok. "Eksikleri Oluştur" butonuna tıklayın.</p>
+          </div>
+        `}
       </div>
     `;
   }
@@ -251,24 +307,32 @@ export class ReportsPage {
 
   async renderActions() {
     const actions = await api.getActions();
-    if (actions.length === 0) return '<div class="card fade-in"><p style="color:var(--text-muted)">Aksiyon önerisi yok.</p></div>';
+    if (actions.length === 0) {
+      return `<div class="card fade-in"><div class="empty-state"><p class="empty-state-text">Aksiyon önerisi yok.</p></div></div>`;
+    }
+
+    const priorityClasses = { kritik: 'badge-danger', yüksek: 'badge-warning', orta: 'badge-info' };
+    const priorityColors = { kritik: 'var(--accent-danger)', yüksek: 'var(--accent-warning)', orta: 'var(--accent-info)' };
 
     return `
       <div class="card fade-in">
-        <h3 style="font-weight:700;margin-bottom:var(--space-md)">⚡ Önerilen Aksiyonlar</h3>
+        <div class="card-header">
+          <h3 class="card-title">Önerilen Aksiyonlar</h3>
+          <span class="badge badge-info">${actions.length} öneri</span>
+        </div>
         ${actions.map(a => {
-          const colors = { kritik: 'var(--accent-danger)', yüksek: '#ff6b35', orta: 'var(--accent-warning)' };
-          const color = colors[a.priority] || 'var(--accent-primary)';
+          const color = priorityColors[a.priority] || 'var(--accent-primary)';
+          const badgeClass = priorityClasses[a.priority] || 'badge-success';
           return `
-            <div style="padding:var(--space-md);border-left:4px solid ${color};background:var(--surface-2);border-radius:var(--radius-sm);margin-bottom:var(--space-sm)">
-              <div style="display:flex;justify-content:space-between;align-items:start">
-                <strong style="font-size:var(--font-sm)">${a.title}</strong>
-                <span style="font-size:var(--font-xxs);padding:2px 8px;background:${color};color:white;border-radius:10px">${a.priority}</span>
+            <div class="card mb-sm" style="border-left:4px solid ${color}">
+              <div class="card-header">
+                <strong class="section-title">${a.title}</strong>
+                <span class="badge ${badgeClass}">${a.priority}</span>
               </div>
-              <p style="font-size:var(--font-xs);color:var(--text-secondary);margin:var(--space-xs) 0">${a.description}</p>
-              <details style="font-size:var(--font-xs)">
-                <summary style="cursor:pointer;color:var(--text-muted)">Neden?</summary>
-                <p style="margin-top:var(--space-xs);color:var(--text-secondary)">${a.reason}</p>
+              <p class="card-subtitle">${a.description}</p>
+              <details class="mt-sm">
+                <summary class="card-subtitle" style="cursor:pointer">Neden?</summary>
+                <p class="card-subtitle mt-sm">${a.reason}</p>
               </details>
             </div>
           `;
@@ -280,10 +344,8 @@ export class ReportsPage {
   bindEvents() {
     this.container.querySelectorAll('.tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        this.container.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('active'); b.style.background = ''; b.style.color = ''; });
+        this.container.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        btn.style.background = 'var(--accent-primary)';
-        btn.style.color = 'white';
         this.loadTab(btn.dataset.tab);
       });
     });

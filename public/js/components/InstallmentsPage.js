@@ -31,7 +31,7 @@ export class InstallmentsPage {
           <button class="btn btn-primary" id="addInstBtn">+ Taksit Ekle</button>
         </div>
 
-        <div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">
+        <div class="stats-grid">
           <div class="card stat-card fade-in stagger-1">
             <div class="stat-icon">💳</div>
             <p class="card-title">Aktif Taksit</p>

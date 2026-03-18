@@ -11,7 +11,7 @@ export class SavingsView {
   }
 
   async render() {
-    this.container.innerHTML = '<div class="text-center mt-lg" style="color:var(--text-muted)">Analiz hazırlanıyor...</div>';
+    this.container.innerHTML = '<div class="loading">Analiz hazırlanıyor...</div>';
 
     try {
       const savings = await api.getSavingsAnalysis();
@@ -80,7 +80,7 @@ export class SavingsView {
     return `
       <div class="card mt-lg fade-in">
         <h3 class="card-title" style="margin-bottom:var(--space-lg)">📅 12 Aylık Tasarruf Projeksiyonu</h3>
-        <div class="bar-chart" style="height:200px">
+        <div class="bar-chart" style="min-height:200px">
           ${show.map(p => {
             const heightPercent = Math.abs(p.savings) / maxSavings * 100;
             const isNeg = p.savings < 0;
@@ -94,7 +94,7 @@ export class SavingsView {
           }).join('')}
         </div>
 
-        <table class="data-table mt-lg">
+        <div class="table-responsive mt-lg"><table class="data-table">
           <thead>
             <tr>
               <th>Ay</th>
@@ -113,7 +113,7 @@ export class SavingsView {
               </tr>
             `).join('')}
           </tbody>
-        </table>
+        </table></div>
       </div>
     `;
   }

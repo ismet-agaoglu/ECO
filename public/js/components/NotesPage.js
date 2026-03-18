@@ -28,7 +28,7 @@ export class NotesPage {
           <button class="btn btn-primary" id="addNoteBtn">+ Not Ekle</button>
         </div>
 
-        <div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">
+        <div class="stats-grid">
           <div class="card stat-card fade-in"><div class="stat-icon">📝</div><p class="card-title">Aktif Notlar</p><p class="card-value">${active.length}</p></div>
           <div class="card stat-card fade-in"><div class="stat-icon">⚠️</div><p class="card-title">Yükümlülükler</p><p class="card-value" style="color:var(--accent-warning)">${formatCurrency(totalObl)}</p></div>
           <div class="card stat-card fade-in"><div class="stat-icon">✅</div><p class="card-title">Dönüştürülen</p><p class="card-value">${converted.length}</p></div>

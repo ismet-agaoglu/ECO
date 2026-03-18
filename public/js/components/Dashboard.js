@@ -13,7 +13,7 @@ export class Dashboard {
   }
 
   async render() {
-    this.container.innerHTML = '<div class="text-center mt-lg" style="color:var(--text-muted)">Yükleniyor...</div>';
+    this.container.innerHTML = '<div class="loading">Yükleniyor...</div>';
 
     try {
       const [summary, categorySummary, transactions, debts, budgetInfo, upcoming, recommendations, pending] = await Promise.all([
@@ -39,7 +39,7 @@ export class Dashboard {
         ${this.renderDebtSummary(debts)}
       `;
     } catch (err) {
-      this.container.innerHTML = `<div class="empty-state"><p>Veri yüklenirken hata oluştu.</p></div>`;
+      this.container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><p class="empty-state-text">Veri yüklenirken hata oluştu</p></div>';
       console.error(err);
     }
   }
@@ -67,7 +67,7 @@ export class Dashboard {
         <div class="card stat-card debt fade-in stagger-4">
           <div class="stat-icon">🏦</div>
           <p class="card-title">Toplam Borç</p>
-          <p class="card-value" style="color: var(--accent-warning)">${formatCurrency(summary.totalDebt)}</p>
+          <p class="card-value negative">${formatCurrency(summary.totalDebt)}</p>
           <p class="card-subtitle">Aylık faiz: ${formatCurrency(summary.totalInterestPerMonth)}</p>
         </div>
       </div>
@@ -135,42 +135,49 @@ export class Dashboard {
     }
 
     const percent = Math.min(100, (budget.spent / budget.budgetLimit) * 100);
-    const circumference = 2 * Math.PI * 90;
+    const circumference = 2 * Math.PI * 85;
     const offset = circumference - (percent / 100) * circumference;
     const strokeColor = percent > 90 ? 'var(--accent-danger)' : percent > 70 ? 'var(--accent-warning)' : 'var(--accent-primary)';
-    const remainingColor = budget.remaining >= 0 ? 'var(--accent-primary)' : 'var(--accent-danger)';
+    const isOver = budget.remaining < 0;
 
     return `
       <div class="card chart-card fade-in stagger-6">
         <div class="card-header"><h3 class="card-title">Bütçe Takibi</h3></div>
         <div class="budget-display">
           <div class="budget-circle">
-            <svg width="200" height="200" viewBox="0 0 200 200">
-              <circle class="budget-circle-bg" cx="100" cy="100" r="90"></circle>
-              <circle class="budget-circle-progress" cx="100" cy="100" r="90"
+            <svg viewBox="0 0 200 200">
+              <circle class="budget-circle-bg" cx="100" cy="100" r="85"></circle>
+              <circle class="budget-circle-progress" cx="100" cy="100" r="85"
                 stroke="${strokeColor}"
                 stroke-dasharray="${circumference}"
                 stroke-dashoffset="${offset}">
               </circle>
             </svg>
             <div class="budget-inner">
-              <div class="budget-remaining" style="color:${remainingColor}">${formatCurrency(budget.remaining)}</div>
-              <div class="budget-remaining-label">Kalan Harcama Hakkı</div>
+              <div class="budget-remaining ${isOver ? 'negative' : 'positive'}">${formatCurrency(Math.abs(budget.remaining))}</div>
+              <div class="budget-remaining-label">${isOver ? 'Bütçe Aşımı' : 'Kalan'}</div>
             </div>
           </div>
           <div class="budget-stats">
             <div class="budget-stat">
               <div class="budget-stat-value">${formatCurrency(budget.budgetLimit)}</div>
-              <div class="budget-stat-label">Bütçe Limiti</div>
+              <div class="budget-stat-label">Limit</div>
             </div>
             <div class="budget-stat">
-              <div class="budget-stat-value" style="color:var(--accent-danger)">${formatCurrency(budget.spent)}</div>
+              <div class="budget-stat-value negative">${formatCurrency(budget.spent)}</div>
               <div class="budget-stat-label">Harcanan</div>
             </div>
             <div class="budget-stat">
               <div class="budget-stat-value">${formatCurrency(budget.dailyAvg)}</div>
-              <div class="budget-stat-label">Günlük Limit</div>
+              <div class="budget-stat-label">Günlük</div>
             </div>
+          </div>
+          <div class="progress-bar-container mt-md">
+            <div class="progress-bar ${percent > 90 ? 'danger' : percent > 70 ? 'warning' : ''}" style="width:${Math.min(100, percent)}%"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:var(--space-xs);font-size:var(--font-xs);color:var(--text-muted)">
+            <span>%${percent.toFixed(0)} kullanıldı</span>
+            <span>${isOver ? '⚠️ Aşım!' : `%${(100 - percent).toFixed(0)} kaldı`}</span>
           </div>
         </div>
       </div>
@@ -228,14 +235,14 @@ export class Dashboard {
           <h3 class="card-title">Borç Özeti</h3>
           <span class="tag tag-expense">${debts.length} borç</span>
         </div>
-        <div class="stats-grid" style="margin-bottom:0">
-          <div style="text-align:center;padding:var(--space-md)">
-            <p style="font-size:var(--font-sm);color:var(--text-muted)">Toplam Borç</p>
-            <p style="font-size:var(--font-xl);font-weight:800;color:var(--accent-warning)">${formatCurrency(totalDebt)}</p>
+        <div class="stats-grid">
+          <div class="card stat-card debt">
+            <p class="card-title">Toplam Borç</p>
+            <p class="card-value">${formatCurrency(totalDebt)}</p>
           </div>
-          <div style="text-align:center;padding:var(--space-md)">
-            <p style="font-size:var(--font-sm);color:var(--text-muted)">Aylık Faiz</p>
-            <p style="font-size:var(--font-xl);font-weight:800;color:var(--accent-danger)">${formatCurrency(totalInterest)}</p>
+          <div class="card stat-card expense">
+            <p class="card-title">Aylık Faiz</p>
+            <p class="card-value negative">${formatCurrency(totalInterest)}</p>
           </div>
         </div>
       </div>
@@ -273,9 +280,9 @@ export class Dashboard {
     if (pending && pending.length > 0) {
       items.push(`
         <div class="card mb-md fade-in" style="border-left:3px solid var(--accent-info)">
-          <div class="flex-between">
-            <span>🤖 <strong>${pending.length} adet</strong> agent işlemi onay bekliyor</span>
-            <span style="font-size:var(--font-xs);color:var(--accent-info)">Agent sekmesinden incele</span>
+            <div class="flex-between">
+              <span>🤖 <strong>${pending.length} adet</strong> agent işlemi onay bekliyor</span>
+              <span class="badge badge-info">Agent sekmesinden incele</span>
           </div>
         </div>
       `);
@@ -286,8 +293,8 @@ export class Dashboard {
       recommendations.slice(0, 3).forEach(r => {
         items.push(`
           <div class="card mb-md fade-in" style="border-left:3px solid ${typeColors[r.type] || 'var(--accent-info)'}">
-            <h4 style="font-weight:700;font-size:var(--font-sm)">${r.title}</h4>
-            <p style="font-size:var(--font-xs);color:var(--text-secondary)">${r.description}</p>
+            <h4 class="card-title">${r.title}</h4>
+            <p class="card-subtitle">${r.description}</p>
           </div>
         `);
       });
@@ -296,7 +303,7 @@ export class Dashboard {
     if (items.length === 0) return '';
     return `
       <div class="mt-lg">
-        <h3 class="section-title" style="margin-bottom:var(--space-md)">⚡ Uyarı & Öneriler</h3>
+        <h3 class="section-title mb-md">⚡ Uyarılar & Öneriler</h3>
         ${items.join('')}
       </div>
     `;

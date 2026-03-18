@@ -16,7 +16,7 @@ export class SurvivalDashboard {
   }
 
   async render() {
-    this.container.innerHTML = '<div class="text-center mt-lg" style="color:var(--text-muted)">Yükleniyor...</div>';
+    this.container.innerHTML = '<div class="loading">Yükleniyor...</div>';
     try {
       const [status, sustainability] = await Promise.all([
         api.getSurvivalStatus(),
@@ -37,29 +37,29 @@ export class SurvivalDashboard {
     const statusColor = statusColors[survival.status] || 'var(--text-muted)';
 
     return `
-      <div class="section-title" style="display:flex;align-items:center;justify-content:space-between">
-        <h2>⚡ Hayatta Kalma Paneli</h2>
-        <div style="display:flex;gap:var(--space-sm)">
-          <button class="btn btn-ghost" id="btnConsolidation">🏦 Konsolidasyon</button>
-          <button class="btn ${this.crisisMode ? 'btn-danger' : 'btn-ghost'}" id="btnCrisis" style="${this.crisisMode ? 'background:var(--accent-danger);color:white' : ''}">
-            🚨 Kriz Modu ${this.crisisMode ? '(Açık)' : ''}
+      <div class="section-header">
+        <h2 class="section-title">Hayatta Kalma Paneli</h2>
+        <div style="display:flex;gap:var(--space-xs);flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" id="btnConsolidation">Konsolidasyon</button>
+          <button class="btn btn-sm ${this.crisisMode ? 'btn-danger' : 'btn-ghost'}" id="btnCrisis" style="${this.crisisMode ? 'background:var(--accent-danger);color:white' : ''}">
+            Kriz ${this.crisisMode ? '(Açık)' : 'Modu'}
           </button>
         </div>
       </div>
 
       <!-- S1: Survival Status -->
       <div class="card fade-in" style="border-left:4px solid ${statusColor}">
-        <div class="flex-between" style="margin-bottom:var(--space-md)">
+        <div class="flex-between flex-col-mobile mb-md">
           <div>
-            <h3 style="font-size:var(--font-lg);font-weight:800">${survival.label}</h3>
-            <p style="color:var(--text-secondary);font-size:var(--font-xs)">Gelir: ${formatCurrency(survival.income)} | Zorunlu Yük: ${formatCurrency(survival.mandatoryLoad)}</p>
+            <h3 class="card-title">${survival.label}</h3>
+            <p class="card-subtitle" style="font-size:var(--font-xs)">Gelir: ${formatCurrency(survival.income)} | Zorunlu Yük: ${formatCurrency(survival.mandatoryLoad)}</p>
           </div>
           <div style="text-align:right">
-            <div style="font-size:var(--font-xxl);font-weight:900;color:${statusColor}">${formatCurrency(survival.freeCash)}</div>
+            <div class="card-value" style="color:${statusColor}">${formatCurrency(survival.freeCash)}</div>
             <div style="font-size:var(--font-xs);color:var(--text-muted)">Serbest Nakit</div>
           </div>
         </div>
-        <div class="stats-grid" style="margin:0">
+        <div class="stat-mini-grid" style="display:grid;grid-template-columns:repeat(${survival.breakdown.length}, 1fr);gap:var(--space-sm)">
           ${survival.breakdown.map(b => `
             <div style="padding:var(--space-sm)">
               <div style="font-size:var(--font-xs);color:var(--text-muted)">${b.name}</div>
@@ -110,19 +110,19 @@ export class SurvivalDashboard {
         <div class="card fade-in mt-md" style="border-left:4px solid var(--accent-danger)">
           <h3 class="card-title">🎯 Break-Even Analizi</h3>
           <p style="color:var(--text-secondary);font-size:var(--font-sm)">${breakEven.message}</p>
-          <div class="stats-grid mt-sm" style="margin-bottom:0">
-            <div style="text-align:center;padding:var(--space-sm)">
-              <div style="font-size:var(--font-xs);color:var(--text-muted)">Aylık Açık</div>
-              <div style="font-size:var(--font-lg);font-weight:800;color:var(--accent-danger)">${formatCurrency(breakEven.shortfall)}</div>
+          <div class="stats-grid mt-sm">
+            <div class="card stat-card">
+              <p class="card-title">Aylık Açık</p>
+              <p class="card-value negative">${formatCurrency(breakEven.shortfall)}</p>
             </div>
-            <div style="text-align:center;padding:var(--space-sm)">
-              <div style="font-size:var(--font-xs);color:var(--text-muted)">Max Kesilebilir</div>
-              <div style="font-size:var(--font-lg);font-weight:800;color:var(--accent-warning)">${formatCurrency(breakEven.maxCuttable)}</div>
+            <div class="card stat-card">
+              <p class="card-title">Max Kesilebilir</p>
+              <p class="card-value" style="color:var(--accent-warning)">${formatCurrency(breakEven.maxCuttable)}</p>
             </div>
             ${breakEven.requiredIncrease ? `
-              <div style="text-align:center;padding:var(--space-sm)">
-                <div style="font-size:var(--font-xs);color:var(--text-muted)">Gereken Ek Gelir</div>
-                <div style="font-size:var(--font-lg);font-weight:800;color:var(--accent-danger)">${formatCurrency(breakEven.requiredIncrease)}</div>
+              <div class="card stat-card">
+                <p class="card-title">Gereken Ek Gelir</p>
+                <p class="card-value negative">${formatCurrency(breakEven.requiredIncrease)}</p>
               </div>
             ` : ''}
           </div>
@@ -172,33 +172,33 @@ export class SurvivalDashboard {
           <p><strong>Ağırlıklı mevcut faiz:</strong> %${sim.weightedCurrentRate}</p>
           <p><strong>Yeni faiz:</strong> %${sim.newRate} | <strong>Fark:</strong> %${sim.rateAdvantage}</p>
         </div>
-        <table style="width:100%;border-collapse:collapse;font-size:var(--font-sm)">
+        <div class="table-responsive"><table class="data-table">
           <thead>
-            <tr style="border-bottom:1px solid var(--border)">
-              <th style="text-align:left;padding:var(--space-xs)">Vade</th>
-              <th style="text-align:right;padding:var(--space-xs)">Aylık</th>
-              <th style="text-align:right;padding:var(--space-xs)">Toplam Faiz</th>
-              <th style="text-align:right;padding:var(--space-xs)">Aylık Rahatlama</th>
-              <th style="text-align:left;padding:var(--space-xs)">Karar</th>
+            <tr>
+              <th>Vade</th>
+              <th style="text-align:right">Aylık</th>
+              <th style="text-align:right">Toplam Faiz</th>
+              <th style="text-align:right">Aylık Rahatlama</th>
+              <th>Karar</th>
             </tr>
           </thead>
           <tbody>
             ${sim.scenarios.map(s => {
               const recColors = { STRONGLY_RECOMMENDED: 'var(--accent-primary)', SURVIVAL_MODE_OPTION: 'var(--accent-warning)', AGGRESSIVE_PAYOFF: 'var(--accent-info)', REJECT: 'var(--accent-danger)' };
               return `
-                <tr style="border-bottom:1px solid var(--border)">
-                  <td style="padding:var(--space-xs)">${s.term} ay</td>
-                  <td style="text-align:right;padding:var(--space-xs)">${formatCurrency(s.monthlyPayment)}</td>
-                  <td style="text-align:right;padding:var(--space-xs);color:var(--accent-danger)">${formatCurrency(s.totalInterest)}</td>
-                  <td style="text-align:right;padding:var(--space-xs);color:${s.monthlyRelief > 0 ? 'var(--accent-primary)' : 'var(--accent-danger)'}">
+                <tr>
+                  <td>${s.term} ay</td>
+                  <td class="text-right">${formatCurrency(s.monthlyPayment)}</td>
+                  <td class="text-right amount-expense">${formatCurrency(s.totalInterest)}</td>
+                  <td class="text-right" style="color:${s.monthlyRelief > 0 ? 'var(--accent-primary)' : 'var(--accent-danger)'}">
                     ${s.monthlyRelief > 0 ? '+' : ''}${formatCurrency(s.monthlyRelief)}
                   </td>
-                  <td style="padding:var(--space-xs);color:${recColors[s.recommendation]};font-weight:700;font-size:var(--font-xs)">${s.label}</td>
+                  <td style="color:${recColors[s.recommendation]};font-weight:700;font-size:var(--font-xs)">${s.label}</td>
                 </tr>
               `;
             }).join('')}
           </tbody>
-        </table>
+        </table></div>
         <div class="mt-md" style="font-size:var(--font-xs);color:var(--text-muted)">
           ${sim.scenarios[0]?.warnings?.map(w => `<p style="color:${w.type === 'REJECT' ? 'var(--accent-danger)' : w.type === 'WARNING' ? 'var(--accent-warning)' : 'var(--text-muted)'}">⚠️ ${w.message}</p>`).join('') || ''}
         </div>

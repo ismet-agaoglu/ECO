@@ -16,7 +16,7 @@ export class TaxPanel {
   }
 
   async render() {
-    this.container.innerHTML = '<div class="text-center mt-lg" style="color:var(--text-muted)">Yükleniyor...</div>';
+    this.container.innerHTML = '<div class="loading">Yükleniyor...</div>';
     try {
       const [yearData, brackets, marginal] = await Promise.all([
         api.postTaxSimulation({ monthlyGross: this.gross }),
@@ -43,32 +43,32 @@ export class TaxPanel {
 
       <!-- Current Month Status -->
       <div class="card fade-in" style="border-left:4px solid var(--accent-info)">
-        <div class="flex-between" style="margin-bottom:var(--space-sm)">
+        <div class="flex-between flex-col-mobile mb-sm">
           <div>
-            <h3 style="font-weight:800">${cm.monthName} — ${cm.bracketLabel} Diliminde</h3>
-            <p style="font-size:var(--font-xs);color:var(--text-muted)">Kümülatif Matrah: ${formatCurrency(cm.cumulativeMatrah)}</p>
+            <h3 class="card-title">${cm.monthName} — ${cm.bracketLabel} Diliminde</h3>
+            <p class="card-subtitle" style="font-size:var(--font-xs)">Kümülatif Matrah: ${formatCurrency(cm.cumulativeMatrah)}</p>
           </div>
           <div style="text-align:right">
-            <div style="font-size:var(--font-xxl);font-weight:900;color:var(--accent-primary)">${formatCurrency(cm.net)}</div>
+            <div class="card-value" style="color:var(--accent-primary)">${formatCurrency(cm.net)}</div>
             <div style="font-size:var(--font-xs);color:var(--text-muted)">Net Maaş</div>
           </div>
         </div>
-        <div class="stats-grid" style="margin:0">
-          <div style="padding:var(--space-sm);text-align:center">
-            <div style="font-size:var(--font-xs);color:var(--text-muted)">Brüt</div>
-            <div style="font-weight:700">${formatCurrency(cm.gross)}</div>
+        <div class="stats-grid">
+          <div class="card stat-card">
+            <p class="card-title">Brüt</p>
+            <p class="card-value">${formatCurrency(cm.gross)}</p>
           </div>
-          <div style="padding:var(--space-sm);text-align:center">
-            <div style="font-size:var(--font-xs);color:var(--text-muted)">Yıl İçi Vergi</div>
-            <div style="font-weight:700;color:var(--accent-warning)">${formatCurrency(months.slice(0, currentMonth + 1).reduce((s, m) => s + m.incomeTax, 0))}</div>
+          <div class="card stat-card">
+            <p class="card-title">Yıl İçi Vergi</p>
+            <p class="card-value" style="color:var(--accent-warning)">${formatCurrency(months.slice(0, currentMonth + 1).reduce((s, m) => s + m.incomeTax, 0))}</p>
           </div>
-          <div style="padding:var(--space-sm);text-align:center">
-            <div style="font-size:var(--font-xs);color:var(--text-muted)">Gelir Vergisi</div>
-            <div style="font-weight:700;color:var(--accent-danger)">${formatCurrency(cm.incomeTax)}</div>
+          <div class="card stat-card">
+            <p class="card-title">Gelir Vergisi</p>
+            <p class="card-value negative">${formatCurrency(cm.incomeTax)}</p>
           </div>
-          <div style="padding:var(--space-sm);text-align:center">
-            <div style="font-size:var(--font-xs);color:var(--text-muted)">Efektif Oran</div>
-            <div style="font-weight:700;color:var(--accent-warning)">%${cm.effectiveTaxRate}</div>
+          <div class="card stat-card">
+            <p class="card-title">Efektif Oran</p>
+            <p class="card-value" style="color:var(--accent-warning)">%${cm.effectiveTaxRate}</p>
           </div>
         </div>
       </div>
@@ -98,23 +98,23 @@ export class TaxPanel {
       <!-- Net Salary Projection (12 months) -->
       <div class="card fade-in mt-md">
         <h3 class="card-title">📈 Yıllık Net Maaş Projeksiyonu</h3>
-        <div style="display:flex;gap:2px;align-items:flex-end;height:200px;margin-top:var(--space-md)">
+        <div class="bar-chart" style="height:200px;margin-top:var(--space-md)">
           ${months.map((m, i) => {
             const maxNet = Math.max(...months.map(x => x.net));
             const minNet = Math.min(...months.map(x => x.net));
             const range = maxNet - minNet || 1;
-            const height = 30 + ((m.net - minNet) / range) * 150;
+            const heightPercent = 20 + ((m.net - minNet) / range) * 80;
             const isCurrent = i === currentMonth;
             return `
-              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
-                <div style="font-size:9px;color:var(--text-muted);transform:rotate(-45deg);white-space:nowrap">${formatCurrency(m.net)}</div>
-                <div style="width:100%;height:${height}px;background:${isCurrent ? 'var(--accent-primary)' : 'var(--accent-info)'};opacity:${isCurrent ? 1 : 0.5};border-radius:4px 4px 0 0;transition:opacity .2s" title="${m.monthName}: ${formatCurrency(m.net)} (${m.bracketLabel})"></div>
-                <div style="font-size:10px;color:${isCurrent ? 'var(--accent-primary)' : 'var(--text-muted)'}; font-weight:${isCurrent ? '800' : '400'}">${m.monthName.substring(0, 3)}</div>
+              <div class="bar-group">
+                <div style="font-size:9px;color:var(--text-muted);white-space:nowrap">${formatCurrency(m.net)}</div>
+                <div class="bar" style="height:${heightPercent}%;background:${isCurrent ? 'var(--accent-primary)' : 'var(--accent-info)'};opacity:${isCurrent ? 1 : 0.5}" title="${m.monthName}: ${formatCurrency(m.net)} (${m.bracketLabel})"></div>
+                <div class="bar-label" style="color:${isCurrent ? 'var(--accent-primary)' : 'var(--text-muted)'}; font-weight:${isCurrent ? '800' : '400'}">${m.monthName.substring(0, 3)}</div>
               </div>
             `;
           }).join('')}
         </div>
-        <div class="flex-between mt-md" style="font-size:var(--font-sm)">
+        <div class="flex-between flex-col-mobile mt-md" style="font-size:var(--font-sm)">
           <span>Yıllık Toplam Net: <strong style="color:var(--accent-primary)">${formatCurrency(yearly.totalNet)}</strong></span>
           <span>Yıllık Efektif Oran: <strong style="color:var(--accent-warning)">%${yearly.effectiveRate}</strong></span>
         </div>
@@ -123,22 +123,22 @@ export class TaxPanel {
       <!-- Year Summary -->
       <div class="card fade-in mt-md">
         <h3 class="card-title">📋 Yıllık Özet</h3>
-        <div class="stats-grid" style="margin:0">
-          <div style="text-align:center;padding:var(--space-sm)">
-            <div style="font-size:var(--font-xs);color:var(--text-muted)">Toplam Brüt</div>
-            <div style="font-size:var(--font-lg);font-weight:800">${formatCurrency(yearly.totalGross)}</div>
+        <div class="stats-grid">
+          <div class="card stat-card">
+            <p class="card-title">Toplam Brüt</p>
+            <p class="card-value">${formatCurrency(yearly.totalGross)}</p>
           </div>
-          <div style="text-align:center;padding:var(--space-sm)">
-            <div style="font-size:var(--font-xs);color:var(--text-muted)">Toplam Net</div>
-            <div style="font-size:var(--font-lg);font-weight:800;color:var(--accent-primary)">${formatCurrency(yearly.totalNet)}</div>
+          <div class="card stat-card">
+            <p class="card-title">Toplam Net</p>
+            <p class="card-value positive">${formatCurrency(yearly.totalNet)}</p>
           </div>
-          <div style="text-align:center;padding:var(--space-sm)">
-            <div style="font-size:var(--font-xs);color:var(--text-muted)">Toplam Vergi</div>
-            <div style="font-size:var(--font-lg);font-weight:800;color:var(--accent-danger)">${formatCurrency(yearly.totalIncomeTax)}</div>
+          <div class="card stat-card">
+            <p class="card-title">Toplam Vergi</p>
+            <p class="card-value negative">${formatCurrency(yearly.totalIncomeTax)}</p>
           </div>
-          <div style="text-align:center;padding:var(--space-sm)">
-            <div style="font-size:var(--font-xs);color:var(--text-muted)">Ort. Aylık Net</div>
-            <div style="font-size:var(--font-lg);font-weight:800">${formatCurrency(yearly.avgMonthlyNet)}</div>
+          <div class="card stat-card">
+            <p class="card-title">Ort. Aylık Net</p>
+            <p class="card-value">${formatCurrency(yearly.avgMonthlyNet)}</p>
           </div>
         </div>
       </div>
@@ -146,11 +146,13 @@ export class TaxPanel {
       <!-- Overtime Simulator -->
       <div class="card fade-in mt-md" style="border-left:4px solid var(--accent-info)">
         <h3 class="card-title">⏰ Ek Mesai Simülatörü</h3>
-        <div style="display:flex;gap:var(--space-md);flex-wrap:wrap;margin-bottom:var(--space-md);align-items:center">
-          <div>
-            <label style="font-size:var(--font-xs);color:var(--text-muted)">Saat</label>
-            <input type="range" id="otHours" min="1" max="40" value="10" style="width:150px">
-            <span id="otHoursLabel" style="font-weight:700;margin-left:var(--space-xs)">10</span>
+        <div class="inline-form mb-md">
+          <div class="field" style="flex:1;min-width:120px">
+            <label>Saat</label>
+            <div class="flex gap-sm" style="align-items:center">
+              <input type="range" id="otHours" min="1" max="40" value="10" style="flex:1">
+              <span id="otHoursLabel" style="font-weight:700;min-width:24px">10</span>
+            </div>
           </div>
           <button class="btn btn-primary" id="btnSimOvertime">Hesapla</button>
         </div>
@@ -187,23 +189,11 @@ export class TaxPanel {
               <strong style="font-size:var(--font-md)">${hours} Saat Ek Mesai</strong>
               <span style="color:${wColors[worthiness.color]};font-weight:800;font-size:var(--font-md)">${worthiness.label}</span>
             </div>
-            <div class="stats-grid mt-sm" style="margin-bottom:0">
-              <div style="text-align:center">
-                <div style="font-size:var(--font-xs);color:var(--text-muted)">Brüt Kazanç</div>
-                <div style="font-weight:700">${formatCurrency(marginal.grossEarned)}</div>
-              </div>
-              <div style="text-align:center">
-                <div style="font-size:var(--font-xs);color:var(--text-muted)">Net Kalan</div>
-                <div style="font-weight:700;color:var(--accent-primary)">${formatCurrency(marginal.realNetBenefit)}</div>
-              </div>
-              <div style="text-align:center">
-                <div style="font-size:var(--font-xs);color:var(--text-muted)">Vergiye Giden</div>
-                <div style="font-weight:700;color:var(--accent-danger)">${formatCurrency(marginal.taxTaken)}</div>
-              </div>
-              <div style="text-align:center">
-                <div style="font-size:var(--font-xs);color:var(--text-muted)">Net Saatlik</div>
-                <div style="font-weight:700;color:${wColors[worthiness.color]}">${formatCurrency(hourly.netHourly)}/sa</div>
-              </div>
+            <div class="stats-grid mt-sm">
+              <div class="card stat-card"><p class="card-title">Brüt Kazanç</p><p class="card-value">${formatCurrency(marginal.grossEarned)}</p></div>
+              <div class="card stat-card"><p class="card-title">Net Kalan</p><p class="card-value positive">${formatCurrency(marginal.realNetBenefit)}</p></div>
+              <div class="card stat-card"><p class="card-title">Vergiye Giden</p><p class="card-value negative">${formatCurrency(marginal.taxTaken)}</p></div>
+              <div class="card stat-card"><p class="card-title">Net Saatlik</p><p class="card-value" style="color:${wColors[worthiness.color]}">${formatCurrency(hourly.netHourly)}/sa</p></div>
             </div>
             <p style="font-size:var(--font-xs);color:var(--text-muted);margin-top:var(--space-sm)">
               Brüt: ${hourly.breakdown.brütSaatlik}/sa → Net: ${hourly.breakdown.netSaatlik}/sa | Kazancın %${marginal.effectiveRetention}'${marginal.effectiveRetention >= 50 ? 'i' : 'u'} kalıyor

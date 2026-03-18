@@ -12,42 +12,52 @@ export class GoalsPage {
   }
 
   async render() {
-    this.container.innerHTML = '<div class="text-center mt-lg" style="color:var(--text-muted)">Yükleniyor...</div>';
+    this.container.innerHTML = '<div class="loading">Hedefler yükleniyor...</div>';
     try {
       this.goals = await api.getGoals();
       this.container.innerHTML = this.renderPage();
       this.bindEvents();
     } catch (err) {
-      this.container.innerHTML = `<div class="empty-state"><p>Hata: ${err.message}</p></div>`;
+      this.container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🎯</div><p class="empty-state-text">Hedefler yüklenemedi: ${err.message}</p></div>`;
     }
   }
 
   renderPage() {
     return `
-      <div class="section-header" style="display:flex;justify-content:space-between;align-items:center">
-        <h2 class="section-title">🎯 Birikim Hedefleri</h2>
-        <button class="btn" id="btnAddGoal" style="background:var(--accent-primary);color:white">+ Yeni Hedef</button>
+      <div class="section-header">
+        <h2 class="section-title">Birikim Hedefleri</h2>
+        <button class="btn btn-primary" id="btnAddGoal">+ Yeni Hedef</button>
       </div>
 
       ${this.goals.length === 0 ? `
-        <div class="empty-state"><p>Henüz hedef eklenmemiş. İlk hedefini oluştur!</p></div>
+        <div class="empty-state">
+          <div class="empty-state-icon">🎯</div>
+          <p class="empty-state-text">Henüz hedef eklenmemiş</p>
+          <p class="card-subtitle">İlk birikim hedefini oluşturmak için yukarıdaki butona tıkla</p>
+        </div>
       ` : `
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:var(--space-md)">
+        <div class="goal-grid">
           ${this.goals.map(g => this.renderGoalCard(g)).join('')}
         </div>
       `}
 
       <div class="card fade-in mt-lg">
-        <h3 style="font-weight:700;margin-bottom:var(--space-md)">🧮 Ters Hesaplama</h3>
-        <p style="font-size:var(--font-sm);color:var(--text-secondary);margin-bottom:var(--space-md)">Hedef tutar ve süre gir, aylık ne kadar biriktirmen gerektiğini hesapla.</p>
-        <div style="display:flex;gap:var(--space-md);flex-wrap:wrap;align-items:flex-end">
-          <div><label style="font-size:var(--font-xs);color:var(--text-muted);display:block;margin-bottom:4px">Hedef Tutar (₺)</label>
-            <input type="number" id="rcTarget" value="100000" min="0" step="10000" style="padding:var(--space-sm);border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text-primary);width:150px"></div>
-          <div><label style="font-size:var(--font-xs);color:var(--text-muted);display:block;margin-bottom:4px">Süre (ay)</label>
-            <input type="number" id="rcMonths" value="12" min="1" max="120" style="padding:var(--space-sm);border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text-primary);width:100px"></div>
-          <button class="btn" id="btnReverseCalc" style="background:var(--accent-primary);color:white">Hesapla</button>
+        <div class="card-header">
+          <h3 class="card-title">Ters Hesaplama</h3>
         </div>
-        <div id="reverseResult" style="margin-top:var(--space-md)"></div>
+        <p class="card-subtitle mb-md">Hedef tutar ve süre gir, aylık ne kadar biriktirmen gerektiğini hesapla.</p>
+        <div class="inline-form">
+          <div class="field">
+            <label>Hedef Tutar (₺)</label>
+            <input type="number" id="rcTarget" value="100000" min="0" step="10000">
+          </div>
+          <div class="field">
+            <label>Süre (ay)</label>
+            <input type="number" id="rcMonths" value="12" min="1" max="120">
+          </div>
+          <button class="btn btn-primary" id="btnReverseCalc">Hesapla</button>
+        </div>
+        <div id="reverseResult" class="mt-md"></div>
       </div>
     `;
   }
@@ -55,37 +65,42 @@ export class GoalsPage {
   renderGoalCard(g) {
     const percent = g.targetAmount > 0 ? Math.min(100, Math.round((g.currentAmount || 0) / g.targetAmount * 100)) : 0;
     const remaining = Math.max(0, g.targetAmount - (g.currentAmount || 0));
-    const color = percent >= 100 ? 'var(--accent-primary)' : percent >= 50 ? 'var(--accent-warning)' : 'var(--accent-danger)';
+    const colorClass = percent >= 100 ? 'badge-success' : percent >= 50 ? 'badge-warning' : 'badge-danger';
+    const barColor = percent >= 100 ? 'var(--accent-primary)' : percent >= 50 ? 'var(--accent-warning)' : 'var(--accent-danger)';
 
     return `
-      <div class="card fade-in" style="border-top:4px solid ${color}">
-        <div style="display:flex;justify-content:space-between;align-items:start">
+      <div class="card fade-in">
+        <div class="card-header">
           <div>
-            <h3 style="font-weight:700;font-size:var(--font-md)">${g.icon || '🎯'} ${g.name}</h3>
-            <p style="font-size:var(--font-xs);color:var(--text-muted)">${g.description || ''}</p>
+            <h3 class="section-title">${g.icon || '🎯'} ${g.name}</h3>
+            ${g.description ? `<p class="card-subtitle">${g.description}</p>` : ''}
           </div>
-          <div style="display:flex;gap:var(--space-xs)">
+          <div class="action-pair">
             <button class="btn btn-ghost btn-sm goal-sim" data-id="${g.id}" title="Simüle et">📊</button>
-            <button class="btn btn-ghost btn-sm goal-del" data-id="${g.id}" title="Sil" style="color:var(--accent-danger)">✕</button>
+            <button class="btn btn-ghost btn-sm btn-danger goal-del" data-id="${g.id}" title="Sil">✕</button>
           </div>
         </div>
-        <div style="margin:var(--space-md) 0">
-          <div style="display:flex;justify-content:space-between;font-size:var(--font-xs);margin-bottom:4px">
+        <div class="goal-progress">
+          <div class="flex-between mb-sm" style="font-size:var(--font-xs)">
             <span>${formatCurrency(g.currentAmount || 0)}</span>
             <span>${formatCurrency(g.targetAmount)}</span>
           </div>
-          <div style="background:var(--surface-2);border-radius:6px;height:12px;overflow:hidden">
-            <div style="width:${percent}%;height:100%;background:${color};border-radius:6px;transition:width 0.5s"></div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width:${percent}%;background:${barColor}"></div>
           </div>
-          <div style="text-align:center;font-size:var(--font-sm);font-weight:700;color:${color};margin-top:var(--space-xs)">%${percent}</div>
+          <div class="text-center mt-sm">
+            <span class="badge ${colorClass}">%${percent}</span>
+          </div>
         </div>
-        <div style="font-size:var(--font-xs);color:var(--text-secondary)">
+        <p class="card-subtitle">
           Kalan: ${formatCurrency(remaining)}
-          ${g.targetDate ? ` | Hedef: ${g.targetDate}` : ''}
-        </div>
-        <div style="margin-top:var(--space-sm)">
-          <input type="number" class="goal-add-input" data-id="${g.id}" placeholder="Ekle..." min="0" style="width:100px;padding:4px 8px;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text-primary);font-size:var(--font-xs)">
-          <button class="btn btn-ghost btn-sm goal-add-btn" data-id="${g.id}" style="font-size:var(--font-xs)">+ Ekle</button>
+          ${g.targetDate ? ` · Hedef: ${g.targetDate}` : ''}
+        </p>
+        <div class="inline-form mt-sm">
+          <div class="field">
+            <input type="number" class="goal-add-input" data-id="${g.id}" placeholder="Tutar ekle..." min="0">
+          </div>
+          <button class="btn btn-sm btn-primary goal-add-btn" data-id="${g.id}">+ Ekle</button>
         </div>
       </div>
     `;
@@ -95,12 +110,24 @@ export class GoalsPage {
     // Yeni hedef
     this.container.querySelector('#btnAddGoal')?.addEventListener('click', () => {
       this.helpers.openModal('Yeni Hedef', `
-        <div style="display:flex;flex-direction:column;gap:var(--space-md)">
-          <input id="goalName" placeholder="Hedef adı" style="padding:var(--space-sm);border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text-primary)">
-          <input id="goalTarget" type="number" placeholder="Hedef tutar" style="padding:var(--space-sm);border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text-primary)">
-          <input id="goalDate" type="date" style="padding:var(--space-sm);border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text-primary)">
-          <input id="goalIcon" placeholder="Emoji (opsiyonel)" value="🎯" style="padding:var(--space-sm);border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text-primary)">
-          <button class="btn" id="btnSaveGoal" style="background:var(--accent-primary);color:white">Kaydet</button>
+        <div class="form-group">
+          <label class="form-label">Hedef Adı</label>
+          <input id="goalName" class="form-input" placeholder="Ör: Araba, Tatil, Acil Fon">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Hedef Tutar (₺)</label>
+          <input id="goalTarget" type="number" class="form-input" placeholder="100000">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Hedef Tarih</label>
+          <input id="goalDate" type="date" class="form-input">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Emoji</label>
+          <input id="goalIcon" class="form-input" placeholder="🎯" value="🎯">
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" id="btnSaveGoal">Kaydet</button>
         </div>
       `);
       setTimeout(() => {
@@ -109,9 +136,13 @@ export class GoalsPage {
           const targetAmount = parseFloat(document.getElementById('goalTarget').value) || 0;
           const targetDate = document.getElementById('goalDate').value || null;
           const icon = document.getElementById('goalIcon').value || '🎯';
-          if (!name || !targetAmount) return;
+          if (!name || !targetAmount) {
+            this.helpers.onToast('Ad ve hedef tutar gerekli', 'error');
+            return;
+          }
           await api.addGoal({ name, targetAmount, targetDate, icon });
           this.helpers.closeModal();
+          this.helpers.onToast('Hedef oluşturuldu', 'success');
           this.render();
         });
       }, 100);
@@ -123,7 +154,7 @@ export class GoalsPage {
         const id = btn.dataset.id;
         const input = this.container.querySelector(`.goal-add-input[data-id="${id}"]`);
         const amount = parseFloat(input.value) || 0;
-        if (amount <= 0) return;
+        if (amount <= 0) { this.helpers.onToast('Geçerli bir tutar girin', 'error'); return; }
         const goal = this.goals.find(g => g.id === id);
         if (!goal) return;
         await api.updateGoal(id, { currentAmount: (goal.currentAmount || 0) + amount });
@@ -138,12 +169,19 @@ export class GoalsPage {
         try {
           const sim = await api.simulateGoal(btn.dataset.id);
           this.helpers.openModal('Hedef Simülasyonu', `
-            <div style="font-size:var(--font-sm)">
-              <p style="margin-bottom:var(--space-md)">${sim.message}</p>
-              <div class="stats-grid">
-                <div class="stat-card"><div class="stat-value" style="font-size:var(--font-md)">%${sim.percent}</div><div class="stat-label">İlerleme</div></div>
-                <div class="stat-card"><div class="stat-value" style="font-size:var(--font-md)">${sim.monthsNeeded} ay</div><div class="stat-label">Kalan süre</div></div>
-                <div class="stat-card"><div class="stat-value" style="font-size:var(--font-md)">${formatCurrency(sim.monthlySavings)}</div><div class="stat-label">Aylık tasarruf</div></div>
+            <p class="card-subtitle mb-md">${sim.message}</p>
+            <div class="stats-grid">
+              <div class="card stat-card">
+                <p class="card-title">İlerleme</p>
+                <p class="card-value">%${sim.percent}</p>
+              </div>
+              <div class="card stat-card">
+                <p class="card-title">Kalan Süre</p>
+                <p class="card-value">${sim.monthsNeeded} ay</p>
+              </div>
+              <div class="card stat-card">
+                <p class="card-title">Aylık Tasarruf</p>
+                <p class="card-value">${formatCurrency(sim.monthlySavings)}</p>
               </div>
             </div>
           `);
@@ -154,7 +192,9 @@ export class GoalsPage {
     // Sil
     this.container.querySelectorAll('.goal-del').forEach(btn => {
       btn.addEventListener('click', async () => {
+        if (!confirm('Bu hedefi silmek istediğine emin misin?')) return;
         await api.deleteGoal(btn.dataset.id);
+        this.helpers.onToast('Hedef silindi', 'info');
         this.render();
       });
     });
@@ -165,14 +205,19 @@ export class GoalsPage {
       const targetMonths = parseInt(this.container.querySelector('#rcMonths').value) || 12;
       try {
         const result = await api.postGoalReverseCalc({ targetAmount, targetMonths });
-        const color = result.feasible ? 'var(--accent-primary)' : 'var(--accent-danger)';
+        const statusClass = result.feasible ? 'badge-success' : 'badge-danger';
+        const statusText = result.feasible ? '✅ Ulaşılabilir' : '❌ Yetersiz bütçe';
         this.container.querySelector('#reverseResult').innerHTML = `
-          <div style="padding:var(--space-md);background:var(--surface-2);border-radius:var(--radius-sm);border-left:4px solid ${color}">
-            <p style="font-size:var(--font-sm);font-weight:700;color:${color}">${result.feasible ? '✅ Mümkün' : '❌ Yetersiz bütçe'}</p>
-            <p style="font-size:var(--font-sm);margin-top:var(--space-xs)">${result.message}</p>
+          <div class="card">
+            <div class="card-header">
+              <span class="badge ${statusClass}">${statusText}</span>
+            </div>
+            <p class="card-subtitle">${result.message}</p>
           </div>
         `;
-      } catch (err) { this.container.querySelector('#reverseResult').innerHTML = `<p style="color:var(--accent-danger)">Hata: ${err.message}</p>`; }
+      } catch (err) {
+        this.container.querySelector('#reverseResult').innerHTML = `<div class="card"><p class="card-subtitle" style="color:var(--accent-danger)">Hata: ${err.message}</p></div>`;
+      }
     });
   }
 }

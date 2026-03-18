@@ -16,7 +16,7 @@ export class CategoryView {
   }
 
   async render() {
-    this.container.innerHTML = '<div class="text-center mt-lg" style="color:var(--text-muted)">Yükleniyor...</div>';
+    this.container.innerHTML = '<div class="loading">Yükleniyor...</div>';
 
     try {
       const [categorySummary, allCategories] = await Promise.all([
@@ -43,7 +43,7 @@ export class CategoryView {
               <h3 class="card-title">Toplam Harcama</h3>
               <span style="font-size:var(--font-xl);font-weight:800;color:var(--accent-danger)">${formatCurrency(totalExpense)}</span>
             </div>
-            <div class="bar-chart" style="height:250px;margin-top:var(--space-lg)">
+            <div class="bar-chart" style="min-height:200px;margin-top:var(--space-lg)">
               ${categorySummary.map(cat => {
                 const heightPercent = totalExpense > 0 ? (cat.total / totalExpense) * 100 : 0;
                 return `

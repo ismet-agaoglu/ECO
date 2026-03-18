@@ -113,7 +113,7 @@ export class TransactionTable {
         <h2 class="section-title">${formatMonthYear(this.year, this.selectedMonth)}</h2>
         <button class="btn btn-primary" id="addTransactionBtn2">+ İşlem Ekle</button>
       </div>
-      <div class="stats-grid" style="margin-bottom:var(--space-lg)">
+      <div class="stats-grid mb-lg">
         <div class="card stat-card income">
           <p class="card-title">Gelir</p>
           <p class="card-value positive">${formatCurrency(totalIncome)}</p>
@@ -142,7 +142,7 @@ export class TransactionTable {
                 <h4>${week}. Hafta</h4>
                 <span class="week-total ${weekTotal >= 0 ? 'amount-income' : 'amount-expense'}">${formatCurrency(weekTotal)}</span>
               </div>
-              <div class="week-content">
+              <div class="week-content table-responsive">
                 <table class="data-table">
                   <thead>
                     <tr>

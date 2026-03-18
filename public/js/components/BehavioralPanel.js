@@ -16,13 +16,13 @@ export class BehavioralPanel {
   }
 
   async render() {
-    this.container.innerHTML = '<div class="text-center mt-lg" style="color:var(--text-muted)">Davranışsal analiz yükleniyor...</div>';
+    this.container.innerHTML = '<div class="loading">Davranışsal analiz yükleniyor...</div>';
     try {
       this.data = await api.getBehavioralFull(this.year, this.month);
       this.container.innerHTML = this.renderPage();
       this.bindEvents();
     } catch (err) {
-      this.container.innerHTML = `<div class="empty-state"><p>Veri yüklenirken hata: ${err.message}</p></div>`;
+      this.container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><p class="empty-state-text">Veri yüklenirken hata: ${err.message}</p></div>`;
     }
   }
 
@@ -30,11 +30,11 @@ export class BehavioralPanel {
     const { stress, riskScore, dailyLimit, salaryErosion, patterns, anomalies, whatChanged, monteCarlo } = this.data;
     return `
       <div class="section-header">
-        <h2 class="section-title">🎭 Davranışsal Finans — ${formatMonthYear(this.year, this.month)}</h2>
+        <h2 class="section-title">Davranışsal Finans — ${formatMonthYear(this.year, this.month)}</h2>
       </div>
 
       <!-- Üst: Stres + Risk + Günlük Limit yan yana -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--space-md)">
+      <div class="stats-grid">
         ${this.renderStressCard(stress)}
         ${this.renderRiskCard(riskScore)}
         ${this.renderDailyLimitCard(dailyLimit)}
@@ -56,7 +56,7 @@ export class BehavioralPanel {
 
     return `
       <div class="card fade-in" style="border-top:4px solid ${color}">
-        <h3 style="font-weight:700;font-size:var(--font-sm);margin-bottom:var(--space-md)">😰 Finansal Stres</h3>
+        <h3 class="card-title mb-md">😰 Finansal Stres</h3>
         <div style="text-align:center;margin-bottom:var(--space-sm)">
           <div style="font-size:var(--font-xxl);font-weight:900;color:${color}">${s.stressIndex}</div>
           <div style="font-size:var(--font-xs);color:var(--text-muted)">/10 — ${s.label}</div>
@@ -83,7 +83,7 @@ export class BehavioralPanel {
 
     return `
       <div class="card fade-in" style="border-top:4px solid ${color}">
-        <h3 style="font-weight:700;font-size:var(--font-sm);margin-bottom:var(--space-md)">📊 Risk Notu</h3>
+        <h3 class="card-title mb-md">📊 Risk Notu</h3>
         <div style="text-align:center;margin-bottom:var(--space-sm)">
           <div style="font-size:48px;font-weight:900;color:${color}">${r.grade}</div>
           <div style="font-size:var(--font-xs);color:var(--text-muted)">${r.totalScore}/100 — ${r.label}</div>
@@ -110,7 +110,7 @@ export class BehavioralPanel {
 
     return `
       <div class="card fade-in" style="border-top:4px solid ${color}">
-        <h3 style="font-weight:700;font-size:var(--font-sm);margin-bottom:var(--space-md)">💳 Günlük Limit</h3>
+        <h3 class="card-title mb-md">💳 Günlük Limit</h3>
         <div style="text-align:center;margin-bottom:var(--space-sm)">
           <div style="font-size:var(--font-xxl);font-weight:900;color:${color}">${formatCurrency(d.dailyLimit)}</div>
           <div style="font-size:var(--font-xs);color:var(--text-muted)">Bugün harcanan: ${formatCurrency(d.todaySpent)}</div>
@@ -130,14 +130,14 @@ export class BehavioralPanel {
   // ─── B14: Maaş Erime ───────────────────────────────────────
   renderSalaryErosion(se) {
     if (se.message) {
-      return `<div class="card fade-in mt-md"><h3 style="font-weight:700">💸 Maaş Erime Analizi</h3><p style="color:var(--text-muted);margin-top:var(--space-sm)">${se.message}</p></div>`;
+      return `<div class="card fade-in mt-md"><h3 class="card-title">💸 Maaş Erime Analizi</h3><p style="color:var(--text-muted);margin-top:var(--space-sm)">${se.message}</p></div>`;
     }
 
     const barWidth = Math.min(100, se.erosionPercent);
 
     return `
       <div class="card fade-in mt-md">
-        <h3 style="font-weight:700;margin-bottom:var(--space-md)">💸 Maaş Erime Analizi</h3>
+        <h3 class="card-title mb-md">💸 Maaş Erime Analizi</h3>
 
         <!-- Erime barı -->
         <div style="margin-bottom:var(--space-md)">
@@ -162,11 +162,11 @@ export class BehavioralPanel {
 
         <div class="stats-grid">
           <div class="stat-card">
-            <div class="stat-value" style="font-size:var(--font-md)">${formatCurrency(se.income)}</div>
+            <div class="stat-value">${formatCurrency(se.income)}</div>
             <div class="stat-label">Maaş</div>
           </div>
           <div class="stat-card">
-            <div class="stat-value" style="font-size:var(--font-md)">${formatCurrency(se.dailyBurn)}</div>
+            <div class="stat-value">${formatCurrency(se.dailyBurn)}</div>
             <div class="stat-label">Günlük erime</div>
           </div>
           <div class="stat-card">
@@ -174,11 +174,11 @@ export class BehavioralPanel {
             <div class="stat-label">Tahmini bitiş</div>
           </div>
           <div class="stat-card">
-            <div class="stat-value" style="font-size:var(--font-md)">${formatCurrency(se.afterFixed)}</div>
+            <div class="stat-value">${formatCurrency(se.afterFixed)}</div>
             <div class="stat-label">Sabit gider sonrası</div>
           </div>
         </div>
-        <p style="font-size:var(--font-sm);color:var(--text-secondary);margin-top:var(--space-sm)">${se.zeroDayLabel}</p>
+        <p class="card-subtitle mt-sm">${se.zeroDayLabel}</p>
 
         ${se.timeline.length > 0 ? `
           <details style="margin-top:var(--space-md)">
@@ -203,12 +203,12 @@ export class BehavioralPanel {
   // ─── B12: What Changed ──────────────────────────────────────
   renderWhatChanged(wc) {
     if (!wc.highlights || wc.highlights.length === 0) {
-      return `<div class="card fade-in mt-md"><h3 style="font-weight:700">🔄 Bu Ay Ne Değişti?</h3><p style="color:var(--text-muted);margin-top:var(--space-sm)">Karşılaştırma için önceki ay verisi yok</p></div>`;
+      return `<div class="card fade-in mt-md"><h3 class="card-title">🔄 Bu Ay Ne Değişti?</h3><p style="color:var(--text-muted);margin-top:var(--space-sm)">Karşılaştırma için önceki ay verisi yok</p></div>`;
     }
 
     return `
       <div class="card fade-in mt-md">
-        <h3 style="font-weight:700;margin-bottom:var(--space-md)">🔄 Bu Ay Ne Değişti?</h3>
+        <h3 class="card-title mb-md">🔄 Bu Ay Ne Değişti?</h3>
 
         <div style="display:flex;gap:var(--space-lg);margin-bottom:var(--space-md);flex-wrap:wrap">
           ${wc.highlights.map(h => `
@@ -257,7 +257,7 @@ export class BehavioralPanel {
   // ─── B10: Harcama Patternleri ───────────────────────────────
   renderPatterns(p) {
     if (p.message) {
-      return `<div class="card fade-in mt-md"><h3 style="font-weight:700">📅 Harcama Örüntüleri</h3><p style="color:var(--text-muted);margin-top:var(--space-sm)">${p.message}</p></div>`;
+      return `<div class="card fade-in mt-md"><h3 class="card-title">📅 Harcama Örüntüleri</h3><p style="color:var(--text-muted);margin-top:var(--space-sm)">${p.message}</p></div>`;
     }
 
     const maxDay = Math.max(...p.dayOfWeek.map(d => d.total), 1);
@@ -265,8 +265,8 @@ export class BehavioralPanel {
 
     return `
       <div class="card fade-in mt-md">
-        <h3 style="font-weight:700;margin-bottom:var(--space-md)">📅 Harcama Örüntüleri</h3>
-        <p style="font-size:var(--font-sm);color:var(--text-secondary);margin-bottom:var(--space-md)">${p.insight}</p>
+        <h3 class="card-title mb-md">📅 Harcama Örüntüleri</h3>
+        <p class="card-subtitle mb-md">${p.insight}</p>
 
         <!-- Gün bazlı -->
         <h4 style="font-size:var(--font-sm);color:var(--text-secondary);margin-bottom:var(--space-sm)">Haftanın Günleri</h4>
@@ -303,10 +303,10 @@ export class BehavioralPanel {
   renderAnomalies(a) {
     return `
       <div class="card fade-in mt-md" ${a.totalAnomalies > 0 ? 'style="border-left:4px solid var(--accent-warning)"' : ''}>
-        <h3 style="font-weight:700;margin-bottom:var(--space-md)">🔍 Anomali Tespiti</h3>
-        <p style="font-size:var(--font-sm);color:var(--text-secondary);margin-bottom:var(--space-sm)">${a.message}</p>
+        <h3 class="card-title mb-md">🔍 Anomali Tespiti</h3>
+        <p class="card-subtitle mb-sm">${a.message}</p>
         ${a.anomalies.length > 0 ? `
-          <table style="width:100%;font-size:var(--font-sm);border-collapse:collapse">
+          <div class="table-responsive"><table class="data-table">
             <thead>
               <tr style="border-bottom:1px solid var(--border-color)">
                 <th style="text-align:left;padding:var(--space-xs)">Tarih</th>
@@ -334,7 +334,7 @@ export class BehavioralPanel {
                 `;
               }).join('')}
             </tbody>
-          </table>
+          </table></div>
         ` : ''}
       </div>
     `;
@@ -343,7 +343,7 @@ export class BehavioralPanel {
   // ─── B17: Monte Carlo ───────────────────────────────────────
   renderMonteCarlo(mc) {
     if (mc.message) {
-      return `<div class="card fade-in mt-md"><h3 style="font-weight:700">🎲 Monte Carlo Stres Testi</h3><p style="color:var(--text-muted);margin-top:var(--space-sm)">${mc.message}</p></div>`;
+      return `<div class="card fade-in mt-md"><h3 class="card-title">🎲 Monte Carlo Stres Testi</h3><p style="color:var(--text-muted);margin-top:var(--space-sm)">${mc.message}</p></div>`;
     }
 
     const riskColors = { 'Düşük': 'var(--accent-primary)', 'Orta': 'var(--accent-warning)', 'Yüksek': '#ff6b35', 'Kritik': 'var(--accent-danger)' };
@@ -351,7 +351,7 @@ export class BehavioralPanel {
 
     return `
       <div class="card fade-in mt-md">
-        <h3 style="font-weight:700;margin-bottom:var(--space-md)">🎲 Monte Carlo Stres Testi</h3>
+        <h3 class="card-title mb-md">🎲 Monte Carlo Stres Testi</h3>
         <p style="font-size:var(--font-xs);color:var(--text-muted);margin-bottom:var(--space-md)">${mc.simulations} simülasyon, ${mc.months} aylık projeksiyon</p>
 
         <div class="stats-grid" style="margin-bottom:var(--space-md)">
@@ -360,7 +360,7 @@ export class BehavioralPanel {
             <div class="stat-label">${mc.percentiles.pessimistic.label}</div>
           </div>
           <div class="stat-card" style="border-left:3px solid var(--accent-warning)">
-            <div class="stat-value" style="font-size:var(--font-md)">${formatCurrency(mc.percentiles.median.finalCash)}</div>
+            <div class="stat-value">${formatCurrency(mc.percentiles.median.finalCash)}</div>
             <div class="stat-label">${mc.percentiles.median.label}</div>
           </div>
           <div class="stat-card" style="border-left:3px solid var(--accent-primary)">

@@ -15,7 +15,7 @@ export class DebtManager {
   }
 
   async render() {
-    this.container.innerHTML = '<div class="text-center mt-lg" style="color:var(--text-muted)">Yükleniyor...</div>';
+    this.container.innerHTML = '<div class="loading">Yükleniyor...</div>';
 
     try {
       const [debts, analysis] = await Promise.all([

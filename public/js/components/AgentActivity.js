@@ -42,7 +42,7 @@ export class AgentActivity {
         ${pending.length === 0 ? `
           <p style="color:var(--text-muted)">Onay bekleyen işlem yok. Agent veri gönderdiğinde burada görünecek.</p>
         ` : `
-          <table class="data-table">
+          <div class="table-responsive"><table class="data-table">
             <thead><tr><th>Tarih</th><th>Açıklama</th><th>Kategori</th><th style="text-align:right">Tutar</th><th>Güven</th><th></th></tr></thead>
             <tbody>
               ${pending.map(t => {
@@ -64,7 +64,7 @@ export class AgentActivity {
                 `;
               }).join('')}
             </tbody>
-          </table>
+          </table></div>
         `}
       </div>
     `;
@@ -81,7 +81,7 @@ export class AgentActivity {
       <div class="card mb-lg fade-in">
         <h3 class="card-title" style="margin-bottom:var(--space-lg)">📋 İşlem Geçmişi (Son 50)</h3>
         ${logs.length === 0 ? '<p style="color:var(--text-muted)">Henüz işlem kaydı yok</p>' : `
-          <div style="max-height:400px;overflow-y:auto">
+          <div class="table-responsive" style="max-height:400px;overflow-y:auto">
             <table class="data-table">
               <thead><tr><th>Zaman</th><th>İşlem</th><th>Kaynak</th><th>Tür</th><th>Detay</th></tr></thead>
               <tbody>
@@ -108,17 +108,17 @@ export class AgentActivity {
         <h3 class="card-title" style="margin-bottom:var(--space-lg)">🔗 Agent API Kılavuzu</h3>
         <p style="font-size:var(--font-sm);color:var(--text-muted);margin-bottom:var(--space-lg)">OpenClaw agent aşağıdaki endpoint'leri kullanabilir:</p>
         <div style="display:grid;gap:var(--space-md)">
-          <div style="background:var(--bg-primary);padding:var(--space-md);border-radius:var(--radius-md);font-family:monospace;font-size:var(--font-xs)">
+          <div class="api-code-block" style="background:var(--bg-primary);padding:var(--space-md);border-radius:var(--radius-md);font-family:monospace;font-size:var(--font-xs);overflow-wrap:break-word;word-break:break-all">
             <strong style="color:var(--accent-primary)">POST</strong> /api/transactions<br>
             <span style="color:var(--text-muted)">{"source":"agent","confidence":0.85,"amount":500,"type":"expense","category":"cat-market","description":"Migros alışveriş"}</span>
           </div>
-          <div style="background:var(--bg-primary);padding:var(--space-md);border-radius:var(--radius-md);font-family:monospace;font-size:var(--font-xs)">
+          <div class="api-code-block" style="background:var(--bg-primary);padding:var(--space-md);border-radius:var(--radius-md);font-family:monospace;font-size:var(--font-xs);overflow-wrap:break-word">
             <strong style="color:var(--accent-info)">GET</strong> /api/summary?year=2026&month=3
           </div>
-          <div style="background:var(--bg-primary);padding:var(--space-md);border-radius:var(--radius-md);font-family:monospace;font-size:var(--font-xs)">
+          <div class="api-code-block" style="background:var(--bg-primary);padding:var(--space-md);border-radius:var(--radius-md);font-family:monospace;font-size:var(--font-xs)">
             <strong style="color:var(--accent-info)">GET</strong> /api/recommendations
           </div>
-          <div style="background:var(--bg-primary);padding:var(--space-md);border-radius:var(--radius-md);font-family:monospace;font-size:var(--font-xs)">
+          <div class="api-code-block" style="background:var(--bg-primary);padding:var(--space-md);border-radius:var(--radius-md);font-family:monospace;font-size:var(--font-xs);overflow-wrap:break-word">
             <strong style="color:var(--accent-info)">GET</strong> /api/remaining-budget/2026/3
           </div>
         </div>

@@ -11,7 +11,7 @@ export class AnalyticsPage {
   }
 
   async render() {
-    this.container.innerHTML = '<div class="text-center mt-lg" style="color:var(--text-muted)">Analiz yükleniyor...</div>';
+    this.container.innerHTML = '<div class="loading">Analiz yükleniyor...</div>';
     try {
       const [ratios, trends, recommendations, catTrends] = await Promise.all([
         api.getRatios(),
@@ -47,7 +47,7 @@ export class AnalyticsPage {
     ];
 
     return `
-      <div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">
+      <div class="stats-grid">
         ${gauges.map((g, i) => {
           let color = 'var(--accent-primary)';
           if (g.invert) {
@@ -69,11 +69,11 @@ export class AnalyticsPage {
           `;
         }).join('')}
       </div>
-      <div class="stats-grid mt-md" style="grid-template-columns:repeat(3,1fr)">
+      <div class="stats-grid mt-md">
         <div class="card stat-card fade-in">
           <p class="card-title">Harcanabilir Gelir</p>
           <p class="card-value positive">${formatCurrency(r.discretionaryIncome)}</p>
-          <p style="font-size:var(--font-xs);color:var(--text-muted)">Sabit gider + faiz düşüldükten sonra</p>
+          <p class="card-subtitle">Sabit gider + faiz düşüldükten sonra</p>
         </div>
         <div class="card stat-card fade-in">
           <p class="card-title">Aylık Faiz Ödemesi</p>
@@ -93,7 +93,7 @@ export class AnalyticsPage {
 
     return `
       <div class="card mt-lg fade-in">
-        <h3 class="card-title" style="margin-bottom:var(--space-lg)">📈 Gelir/Gider Trendi (Son 6 Ay)</h3>
+        <h3 class="card-title mb-lg">Gelir/Gider Trendi (Son 6 Ay)</h3>
         <div style="display:flex;gap:var(--space-md);align-items:flex-end;height:180px;padding:0 var(--space-md)">
           ${trends.map(t => {
             const incH = (t.income / maxVal) * 100;
@@ -125,10 +125,10 @@ export class AnalyticsPage {
       <div class="section-header mt-lg"><h3 class="section-title">💡 Akıllı Öneriler</h3></div>
       ${recs.map(r => `
         <div class="card mb-md fade-in" style="border-left:3px solid ${typeColors[r.type] || 'var(--accent-info)'}">
-          <h4 style="font-weight:700;margin-bottom:var(--space-xs)">${r.title}</h4>
-          <p style="font-size:var(--font-sm);color:var(--text-secondary);margin-bottom:var(--space-xs)">${r.description}</p>
-          <p style="font-size:var(--font-xs);color:var(--text-muted)">📌 ${r.impact}</p>
-          <p style="font-size:var(--font-xs);color:var(--accent-primary);margin-top:var(--space-xs)">✅ ${r.action}</p>
+          <h4 class="card-title">${r.title}</h4>
+          <p class="card-subtitle">${r.description}</p>
+          <p class="card-subtitle">📌 ${r.impact}</p>
+          <p class="card-subtitle mt-sm" style="color:var(--accent-primary)">✅ ${r.action}</p>
         </div>
       `).join('')}
     `;
@@ -138,7 +138,7 @@ export class AnalyticsPage {
     if (catTrends.length === 0) return '';
     return `
       <div class="card mt-lg fade-in">
-        <h3 class="card-title" style="margin-bottom:var(--space-lg)">📊 Kategori Trendleri (Son 6 Ay)</h3>
+        <h3 class="card-title mb-lg">Kategori Trendleri (Son 6 Ay)</h3>
         <table class="data-table">
           <thead><tr><th>Kategori</th>${catTrends[0]?.months?.map(m => `<th style="text-align:right">${MONTH_NAMES[m.month - 1]?.slice(0, 3)}</th>`).join('') || ''}</tr></thead>
           <tbody>
@@ -158,8 +158,8 @@ export class AnalyticsPage {
     const catOpts = (this.categories || []).map(c => `<option value="${c.id}">${c.icon} ${c.name}</option>`).join('');
     return `
       <div class="card mt-lg fade-in">
-        <h3 class="card-title" style="margin-bottom:var(--space-lg)">🔮 Ya Şöyle Olsaydı?</h3>
-        <p style="font-size:var(--font-sm);color:var(--text-muted);margin-bottom:var(--space-lg)">Bir kategoriyi belirli oranda azaltırsanız ne kadar tasarruf edersiniz?</p>
+        <h3 class="card-title mb-lg">Ya Şöyle Olsaydı?</h3>
+        <p class="card-subtitle mb-lg">Bir kategoriyi belirli oranda azaltırsanız ne kadar tasarruf edersiniz?</p>
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">Kategori</label>
@@ -186,7 +186,7 @@ export class AnalyticsPage {
       const el = document.getElementById('whatIfResult');
       if (!el) return;
       el.innerHTML = `
-        <div class="stats-grid mt-lg" style="grid-template-columns:repeat(3,1fr)">
+        <div class="stats-grid mt-lg">
           <div class="card stat-card">
             <p class="card-title">Aylık Tasarruf</p>
             <p class="card-value positive">${formatCurrency(result.monthlySavings)}</p>

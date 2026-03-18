@@ -11,7 +11,7 @@ export class StrategySimulator {
   }
 
   async render() {
-    this.container.innerHTML = '<div class="text-center mt-lg" style="color:var(--text-muted)">Stratejiler hesaplanıyor...</div>';
+    this.container.innerHTML = '<div class="loading">Stratejiler hesaplanıyor...</div>';
     try {
       const debts = await api.getDebts();
       if (debts.length === 0) {
@@ -28,12 +28,12 @@ export class StrategySimulator {
         <div class="section-header"><h2 class="section-title">Strateji Simülatörü</h2></div>
         <div class="card mb-lg fade-in">
           <h3 class="card-title" style="margin-bottom:var(--space-lg)">💰 Ekstra Ödeme Simülasyonu</h3>
-          <div class="form-row" style="align-items:flex-end">
-            <div class="form-group" style="flex:2">
-              <label class="form-label">Aylık Ekstra Ödeme (₺)</label>
+          <div class="inline-form mb-md">
+            <div class="field" style="flex:2;min-width:150px">
+              <label>Aylık Ekstra Ödeme (₺)</label>
               <input class="form-input" type="range" id="extraSlider" min="0" max="20000" step="500" value="2000">
             </div>
-            <div class="form-group" style="flex:1">
+            <div class="field" style="flex:1;min-width:80px">
               <p id="extraLabel" style="font-size:var(--font-xl);font-weight:700;color:var(--accent-primary);text-align:center">₺2.000</p>
             </div>
           </div>
@@ -103,8 +103,8 @@ export class StrategySimulator {
         </div>
 
         <div class="card mt-lg fade-in">
-          <h3 class="card-title">📊 Karşılaştırma Tablosu</h3>
-          <table class="data-table mt-md">
+          <h3 class="card-title">Karşılaştırma Tablosu</h3>
+          <div class="table-responsive mt-md"><table class="data-table">
             <thead><tr><th>Strateji</th><th style="text-align:right">Süre</th><th style="text-align:right">Toplam Faiz</th><th style="text-align:right">Faiz Tasarrufu</th></tr></thead>
             <tbody>
               ${data.strategies.map(s => {
@@ -117,7 +117,7 @@ export class StrategySimulator {
                 </tr>`;
               }).join('')}
             </tbody>
-          </table>
+          </table></div>
         </div>
 
         ${data.avgMonthlySurplus > 0 ? `

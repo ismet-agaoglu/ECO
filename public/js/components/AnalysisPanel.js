@@ -15,13 +15,13 @@ export class AnalysisPanel {
   }
 
   async render() {
-    this.container.innerHTML = '<div class="text-center mt-lg" style="color:var(--text-muted)">Akıllı analiz yükleniyor...</div>';
+    this.container.innerHTML = '<div class="loading">Akıllı analiz yükleniyor...</div>';
     try {
       this.data = await api.getAnalysisFull(this.year, this.month);
       this.container.innerHTML = this.renderPage();
       this.bindEvents();
     } catch (err) {
-      this.container.innerHTML = `<div class="empty-state"><p>Veri yüklenirken hata: ${err.message}</p></div>`;
+      this.container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><p class="empty-state-text">Veri yüklenirken hata: ${err.message}</p></div>`;
     }
   }
 
@@ -29,7 +29,7 @@ export class AnalysisPanel {
     const { snapshot, netWorth, liquidityRisk, forecast, categoryForecast, deviation, endOfMonth, savingsPotential } = this.data;
     return `
       <div class="section-header">
-        <h2 class="section-title">🧠 Akıllı Analiz — ${formatMonthYear(this.year, this.month)}</h2>
+        <h2 class="section-title">Akıllı Analiz — ${formatMonthYear(this.year, this.month)}</h2>
       </div>
 
       ${this.renderSnapshot(snapshot)}
@@ -52,7 +52,7 @@ export class AnalysisPanel {
 
     return `
       <div class="card fade-in">
-        <h3 style="font-weight:700;margin-bottom:var(--space-md)">📊 Aylık Özet</h3>
+        <h3 class="card-title mb-md">📊 Aylık Özet</h3>
         <div class="stats-grid">
           <div class="stat-card">
             <div class="stat-value" style="color:var(--accent-primary)">${formatCurrency(s.income)}</div>
@@ -98,7 +98,7 @@ export class AnalysisPanel {
 
     return `
       <div class="card fade-in mt-md" style="border-left:4px solid var(--accent-warning)">
-        <h3 style="font-weight:700;margin-bottom:var(--space-md)">⏳ Ay Sonu Tahmini</h3>
+        <h3 class="card-title mb-md">⏳ Ay Sonu Tahmini</h3>
         <div style="display:flex;align-items:center;gap:var(--space-sm);margin-bottom:var(--space-md)">
           <div style="flex:1;background:var(--surface-2);border-radius:6px;height:10px;overflow:hidden">
             <div style="width:${progress}%;height:100%;background:var(--accent-primary);border-radius:6px;transition:width 0.5s"></div>
@@ -107,15 +107,15 @@ export class AnalysisPanel {
         </div>
         <div class="stats-grid">
           <div class="stat-card">
-            <div class="stat-value" style="font-size:var(--font-md)">${formatCurrency(e.spentSoFar)}</div>
+            <div class="stat-value">${formatCurrency(e.spentSoFar)}</div>
             <div class="stat-label">Şu ana kadar harcanan</div>
           </div>
           <div class="stat-card">
-            <div class="stat-value" style="font-size:var(--font-md)">${formatCurrency(e.dailyAvgSpend)}</div>
+            <div class="stat-value">${formatCurrency(e.dailyAvgSpend)}</div>
             <div class="stat-label">Günlük ortalama</div>
           </div>
           <div class="stat-card">
-            <div class="stat-value" style="font-size:var(--font-md)">${formatCurrency(e.projectedExpense)}</div>
+            <div class="stat-value">${formatCurrency(e.projectedExpense)}</div>
             <div class="stat-label">Tahmini ay sonu gider</div>
           </div>
           <div class="stat-card">
@@ -123,7 +123,7 @@ export class AnalysisPanel {
             <div class="stat-label">Tahmini net</div>
           </div>
         </div>
-        <p style="font-size:var(--font-sm);color:var(--text-secondary);margin-top:var(--space-sm)">${e.message}</p>
+        <p class="card-subtitle mt-sm">${e.message}</p>
       </div>
     `;
   }
@@ -134,7 +134,7 @@ export class AnalysisPanel {
 
     return `
       <div class="card fade-in mt-md">
-        <h3 style="font-weight:700;margin-bottom:var(--space-md)">💰 Net Değer</h3>
+        <h3 class="card-title mb-md">💰 Net Değer</h3>
         <div style="display:flex;align-items:center;justify-content:center;margin-bottom:var(--space-md)">
           <div style="text-align:center">
             <div style="font-size:var(--font-xxl);font-weight:900;color:${nwColor}">${formatCurrency(nw.netWorth)}</div>
@@ -151,7 +151,7 @@ export class AnalysisPanel {
             <div class="stat-label">Toplam Borç</div>
           </div>
           <div class="stat-card">
-            <div class="stat-value" style="font-size:var(--font-md)">${nw.debtToAssetRatio === Infinity ? '∞' : nw.debtToAssetRatio}</div>
+            <div class="stat-value">${nw.debtToAssetRatio === Infinity ? '∞' : nw.debtToAssetRatio}</div>
             <div class="stat-label">Borç/Varlık Oranı</div>
           </div>
         </div>
@@ -173,14 +173,14 @@ export class AnalysisPanel {
 
     return `
       <div class="card fade-in mt-md" style="border-left:4px solid ${statusColor}">
-        <h3 style="font-weight:700;margin-bottom:var(--space-md)">🛡️ Likidite Risk Analizi</h3>
+        <h3 class="card-title mb-md">🛡️ Likidite Risk Analizi</h3>
         <div class="stats-grid">
           <div class="stat-card">
-            <div class="stat-value" style="font-size:var(--font-md)">${formatCurrency(lr.monthlyNeed)}</div>
+            <div class="stat-value">${formatCurrency(lr.monthlyNeed)}</div>
             <div class="stat-label">Aylık ihtiyaç</div>
           </div>
           <div class="stat-card">
-            <div class="stat-value" style="font-size:var(--font-md)">${formatCurrency(lr.available)}</div>
+            <div class="stat-value">${formatCurrency(lr.available)}</div>
             <div class="stat-label">Mevcut likidite</div>
           </div>
           <div class="stat-card">
@@ -192,7 +192,7 @@ export class AnalysisPanel {
             <div class="stat-label">${lr.gap >= 0 ? 'Fazla' : 'Açık'}</div>
           </div>
         </div>
-        <p style="font-size:var(--font-sm);color:var(--text-secondary);margin-top:var(--space-sm)">${icon} ${lr.message}</p>
+        <p class="card-subtitle mt-sm">${icon} ${lr.message}</p>
       </div>
     `;
   }
@@ -200,14 +200,14 @@ export class AnalysisPanel {
   // ─── B7: Sapma Analizi ──────────────────────────────────────
   renderDeviation(d) {
     if (!d.deviations || d.deviations.length === 0) {
-      return `<div class="card fade-in mt-md"><h3 style="font-weight:700">📉 Sapma Analizi</h3><p style="color:var(--text-muted);margin-top:var(--space-sm)">Karşılaştırma için önceki ay verisi yok</p></div>`;
+      return `<div class="card fade-in mt-md"><h3 class="card-title">📉 Sapma Analizi</h3><p style="color:var(--text-muted);margin-top:var(--space-sm)">Karşılaştırma için önceki ay verisi yok</p></div>`;
     }
 
     const netDeltaColor = d.netDelta >= 0 ? 'var(--accent-primary)' : 'var(--accent-danger)';
 
     return `
       <div class="card fade-in mt-md">
-        <h3 style="font-weight:700;margin-bottom:var(--space-md)">📉 Önceki Aya Göre Sapma</h3>
+        <h3 class="card-title mb-md">📉 Önceki Aya Göre Sapma</h3>
         <div class="stats-grid" style="margin-bottom:var(--space-md)">
           <div class="stat-card">
             <div class="stat-value" style="font-size:var(--font-md);color:${d.incomeDelta >= 0 ? 'var(--accent-primary)' : 'var(--accent-danger)'}">
@@ -228,7 +228,7 @@ export class AnalysisPanel {
             <div class="stat-label">Net değişim</div>
           </div>
         </div>
-        <table style="width:100%;font-size:var(--font-sm);border-collapse:collapse">
+        <div class="table-responsive"><table class="data-table">
           <thead>
             <tr style="border-bottom:1px solid var(--border-color)">
               <th style="text-align:left;padding:var(--space-xs)">Kategori</th>
@@ -256,7 +256,7 @@ export class AnalysisPanel {
               `;
             }).join('')}
           </tbody>
-        </table>
+        </table></div>
       </div>
     `;
   }
@@ -264,12 +264,12 @@ export class AnalysisPanel {
   // ─── B5: Forecast ───────────────────────────────────────────
   renderForecast(f) {
     if (f.message) {
-      return `<div class="card fade-in mt-md"><h3 style="font-weight:700">🔮 Gelecek Tahmini</h3><p style="color:var(--text-muted);margin-top:var(--space-sm)">${f.message}</p></div>`;
+      return `<div class="card fade-in mt-md"><h3 class="card-title">🔮 Gelecek Tahmini</h3><p style="color:var(--text-muted);margin-top:var(--space-sm)">${f.message}</p></div>`;
     }
 
     return `
       <div class="card fade-in mt-md">
-        <h3 style="font-weight:700;margin-bottom:var(--space-md)">🔮 Gelecek Tahmini (${f.basedOnMonths} aylık veriye dayalı)</h3>
+        <h3 class="card-title mb-md">🔮 Gelecek Tahmini (${f.basedOnMonths} aylık veriye dayalı)</h3>
         <div style="display:flex;gap:var(--space-md);margin-bottom:var(--space-md);flex-wrap:wrap">
           <span style="font-size:var(--font-sm);padding:var(--space-xs) var(--space-sm);background:var(--surface-2);border-radius:4px">
             Gider trendi: <strong>${f.expenseTrend}</strong>
@@ -299,14 +299,14 @@ export class AnalysisPanel {
   // ─── B6: Kategori Gider Tahmini ─────────────────────────────
   renderCategoryForecast(cats) {
     if (!cats || cats.length === 0) {
-      return `<div class="card fade-in mt-md"><h3 style="font-weight:700">📂 Kategori Tahminleri</h3><p style="color:var(--text-muted);margin-top:var(--space-sm)">Yeterli veri yok</p></div>`;
+      return `<div class="card fade-in mt-md"><h3 class="card-title">📂 Kategori Tahminleri</h3><p style="color:var(--text-muted);margin-top:var(--space-sm)">Yeterli veri yok</p></div>`;
     }
 
     const maxAvg = Math.max(...cats.map(c => c.avgMonthly), 1);
 
     return `
       <div class="card fade-in mt-md">
-        <h3 style="font-weight:700;margin-bottom:var(--space-md)">📂 Kategori Bazlı Gider Tahmini</h3>
+        <h3 class="card-title mb-md">📂 Kategori Bazlı Gider Tahmini</h3>
         ${cats.slice(0, 10).map(c => `
           <div style="display:flex;align-items:center;gap:var(--space-sm);padding:var(--space-xs) 0">
             <span style="flex:1;font-size:var(--font-sm)">${c.category}</span>
@@ -324,7 +324,7 @@ export class AnalysisPanel {
   // ─── B9: Tasarruf Potansiyeli ───────────────────────────────
   renderSavingsPotential(sp) {
     if (!sp.categories || sp.categories.length === 0) {
-      return `<div class="card fade-in mt-md"><h3 style="font-weight:700">💡 Tasarruf Potansiyeli</h3><p style="color:var(--text-muted);margin-top:var(--space-sm)">Yeterli veri yok</p></div>`;
+      return `<div class="card fade-in mt-md"><h3 class="card-title">💡 Tasarruf Potansiyeli</h3><p style="color:var(--text-muted);margin-top:var(--space-sm)">Yeterli veri yok</p></div>`;
     }
 
     const typeColors = {
@@ -336,14 +336,14 @@ export class AnalysisPanel {
     return `
       <div class="card fade-in mt-md" style="border-left:4px solid var(--accent-primary)">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-md)">
-          <h3 style="font-weight:700">💡 Tasarruf Potansiyeli</h3>
+          <h3 class="card-title">💡 Tasarruf Potansiyeli</h3>
           <div style="text-align:right">
             <div style="font-size:var(--font-lg);font-weight:900;color:var(--accent-primary)">${formatCurrency(sp.totalSaveable)}/ay</div>
             <div style="font-size:var(--font-xs);color:var(--text-muted)">Harcamanın %${sp.saveablePercent}'i</div>
           </div>
         </div>
-        <p style="font-size:var(--font-sm);color:var(--text-secondary);margin-bottom:var(--space-md)">${sp.message}</p>
-        <table style="width:100%;font-size:var(--font-sm);border-collapse:collapse">
+        <p class="card-subtitle mb-md">${sp.message}</p>
+        <div class="table-responsive"><table class="data-table">
           <thead>
             <tr style="border-bottom:1px solid var(--border-color)">
               <th style="text-align:left;padding:var(--space-xs)">Kategori</th>
@@ -366,7 +366,7 @@ export class AnalysisPanel {
               </tr>
             `).join('')}
           </tbody>
-        </table>
+        </table></div>
       </div>
     `;
   }
@@ -375,20 +375,20 @@ export class AnalysisPanel {
   renderOptimizationSection() {
     return `
       <div class="card fade-in mt-md">
-        <h3 style="font-weight:700;margin-bottom:var(--space-md)">⚙️ Borç Ödeme Optimizasyonu</h3>
-        <p style="font-size:var(--font-sm);color:var(--text-secondary);margin-bottom:var(--space-md)">
+        <h3 class="card-title mb-md">⚙️ Borç Ödeme Optimizasyonu</h3>
+        <p class="card-subtitle mb-md">
           Aylık ayırabileceğiniz maksimum tutarı girin, en yüksek faizli borçlara öncelik verilir (çığ yöntemi).
         </p>
-        <div style="display:flex;gap:var(--space-md);flex-wrap:wrap;align-items:flex-end">
-          <div>
-            <label style="font-size:var(--font-xs);color:var(--text-muted);display:block;margin-bottom:4px">Maks. Aylık Ödeme</label>
-            <input type="number" id="optMaxPayment" value="30000" min="0" step="1000" style="padding:var(--space-sm);border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text-primary);width:150px">
+        <div class="inline-form">
+          <div class="field">
+            <label>Maks. Aylık Ödeme</label>
+            <input type="number" id="optMaxPayment" value="30000" min="0" step="1000">
           </div>
-          <div>
-            <label style="font-size:var(--font-xs);color:var(--text-muted);display:block;margin-bottom:4px">Min. Yaşam Gideri</label>
-            <input type="number" id="optMinLiving" value="20000" min="0" step="1000" style="padding:var(--space-sm);border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text-primary);width:150px">
+          <div class="field">
+            <label>Min. Yaşam Gideri</label>
+            <input type="number" id="optMinLiving" value="20000" min="0" step="1000">
           </div>
-          <button class="btn" id="btnOptimize" style="background:var(--accent-primary);color:white;padding:var(--space-sm) var(--space-lg)">Hesapla</button>
+          <button class="btn btn-primary" id="btnOptimize">Hesapla</button>
         </div>
         <div id="optimizationResult" style="margin-top:var(--space-md)"></div>
       </div>
@@ -406,7 +406,7 @@ export class AnalysisPanel {
           <span style="font-size:var(--font-sm)">Toplam dağıtılan: <strong>${formatCurrency(result.totalAllocated)}</strong></span>
           <span style="font-size:var(--font-sm)">Kalan: <strong>${formatCurrency(result.remaining)}</strong></span>
         </div>
-        <table style="width:100%;font-size:var(--font-sm);border-collapse:collapse">
+        <div class="table-responsive"><table class="data-table">
           <thead>
             <tr style="border-bottom:1px solid var(--border-color)">
               <th style="text-align:left;padding:var(--space-xs)">Borç</th>
@@ -431,7 +431,7 @@ export class AnalysisPanel {
               </tr>
             `).join('')}
           </tbody>
-        </table>
+        </table></div>
       </div>
     `;
   }

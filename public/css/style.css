@@ -926,12 +926,12 @@ body {
 /* ─── Budget Widget ─────────────────────────────────────────────── */
 .budget-display {
   text-align: center;
-  padding: var(--space-xl);
+  padding: var(--space-lg) var(--space-md);
 }
 
 .budget-circle {
-  width: 200px;
-  height: 200px;
+  width: 180px;
+  height: 180px;
   border-radius: 50%;
   margin: 0 auto var(--space-lg);
   position: relative;
@@ -944,6 +944,8 @@ body {
   position: absolute;
   top: 0;
   left: 0;
+  width: 100%;
+  height: 100%;
   transform: rotate(-90deg);
 }
 
@@ -963,37 +965,46 @@ body {
 .budget-inner {
   text-align: center;
   z-index: 1;
+  padding: var(--space-sm);
+  max-width: 130px;
 }
 
 .budget-remaining {
-  font-size: var(--font-2xl);
+  font-size: var(--font-xl);
   font-weight: 800;
+  line-height: 1.2;
 }
 
 .budget-remaining-label {
-  font-size: var(--font-sm);
+  font-size: var(--font-xs);
   color: var(--text-muted);
+  line-height: 1.3;
+  margin-top: 2px;
 }
 
 .budget-stats {
-  display: flex;
-  justify-content: center;
-  gap: var(--space-2xl);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-sm);
   margin-top: var(--space-lg);
 }
 
 .budget-stat {
   text-align: center;
+  padding: var(--space-sm);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-md);
 }
 
 .budget-stat-value {
-  font-size: var(--font-lg);
+  font-size: var(--font-base);
   font-weight: 700;
 }
 
 .budget-stat-label {
   font-size: var(--font-xs);
   color: var(--text-muted);
+  margin-top: 2px;
 }
 
 /* ─── Savings / Strategy Cards ──────────────────────────────────── */
@@ -1535,6 +1546,49 @@ body {
   justify-content: center;
 }
 
+/* ─── Bar Chart ────────────────────────────────────────────────── */
+.bar-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: var(--space-sm);
+}
+
+.bar-group {
+  flex: 1;
+  min-width: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.bar {
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  background: var(--accent-info);
+  opacity: 0.7;
+  transition: opacity var(--transition-fast);
+}
+
+.bar.income { background: var(--gradient-income); opacity: 0.8; }
+.bar.expense { background: var(--gradient-expense); opacity: 0.8; }
+
+.bar-group:hover .bar { opacity: 1; }
+
+.bar-label {
+  font-size: var(--font-xs);
+  color: var(--text-muted);
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* ─── Flex Helper (mobile-safe) ────────────────────────────────── */
+.flex-wrap { display: flex; flex-wrap: wrap; gap: var(--space-md); }
+.gap-lg { gap: var(--space-lg); }
+
 /* ─── Responsive ────────────────────────────────────────────────── */
 @media (max-width: 1024px) {
   .charts-grid {
@@ -1570,7 +1624,7 @@ body {
   }
 
   .stats-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr !important;
   }
 
   .form-row {
@@ -1585,8 +1639,13 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .budget-stats {
-    gap: var(--space-lg);
+  .budget-circle {
+    width: 160px;
+    height: 160px;
+  }
+
+  .budget-remaining {
+    font-size: var(--font-lg);
   }
 
   .donut-chart-container {
@@ -1646,11 +1705,90 @@ body {
   .table-responsive table {
     min-width: 500px;
   }
+
+  /* Survival header buttons */
+  .section-title-row {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: var(--space-sm);
+  }
+
+  .section-title-row .btn-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+    width: 100%;
+  }
+
+  .section-title-row .btn-group .btn {
+    flex: 1;
+    min-width: 0;
+    font-size: var(--font-xs);
+    padding: var(--space-xs) var(--space-sm);
+    white-space: nowrap;
+  }
+
+  /* Tax/Survival stat items */
+  .stat-mini-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* Bar chart mobile */
+  .bar-chart {
+    height: auto !important;
+    min-height: 160px;
+  }
+
+  .bar-group {
+    min-width: 28px;
+  }
+
+  .bar-label {
+    font-size: 0.6rem;
+  }
+
+  /* Flex-between on mobile */
+  .flex-col-mobile {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: var(--space-sm);
+  }
+
+  /* Agent API guide cards */
+  .api-code-block {
+    font-size: var(--font-xs);
+    word-break: break-all;
+    overflow-wrap: break-word;
+  }
+
+  /* Strategy cards */
+  .strategy-comparison {
+    grid-template-columns: 1fr;
+  }
+
+  /* Week content table */
+  .week-content {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .week-content .data-table {
+    min-width: 560px;
+  }
+
+  /* Slider full width */
+  input[type="range"] {
+    width: 100% !important;
+  }
 }
 
 @media (max-width: 480px) {
   .stats-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
+  }
+
+  .stat-mini-grid {
+    grid-template-columns: 1fr !important;
   }
 
   .top-bar {
@@ -1695,8 +1833,144 @@ body {
   }
 
   .budget-circle {
-    width: 160px;
-    height: 160px;
+    width: 150px;
+    height: 150px;
+  }
+
+  .budget-remaining {
+    font-size: var(--font-lg) !important;
+  }
+
+  .budget-stats {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .budget-stat-value {
+    font-size: var(--font-sm);
+  }
+
+  .flex-between {
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+  }
+}
+
+/* ─── Mobile 375px comprehensive fixes ─────────────────────────── */
+@media (max-width: 480px) {
+  /* Bar chart: hide value labels above bars, show only bar + label below */
+  .bar-chart .bar-group > div:first-child:not(.bar):not(.bar-label) {
+    display: none !important;
+  }
+
+  .bar-chart {
+    gap: 2px !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    min-height: 140px !important;
+    height: auto !important;
+    padding-bottom: var(--space-xs);
+  }
+
+  .bar-group {
+    min-width: 24px !important;
+    flex: 1 1 0;
+  }
+
+  .bar-label {
+    font-size: 0.55rem !important;
+    line-height: 1.1;
+    word-break: break-all;
+    max-width: 36px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .bar {
+    max-width: 28px !important;
+  }
+
+  /* Stat card values: prevent overflow of long currency strings */
+  .stat-value,
+  .card-value,
+  .sim-result-value {
+    font-size: var(--font-md) !important;
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .stat-card .stat-value {
+    font-size: var(--font-sm) !important;
+  }
+
+  /* Inline stat-mini-grid: force single column when inline styled */
+  [style*="grid-template-columns"]:not(.calendar-grid) {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* Category forecast / deviation rows: stack on mobile */
+  .card > div[style*="display:flex"][style*="gap"] {
+    flex-wrap: wrap !important;
+  }
+
+  /* Tables: ensure all tables can scroll horizontally */
+  .data-table {
+    font-size: var(--font-xs) !important;
+  }
+
+  .table-responsive {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 calc(-1 * var(--space-md));
+    padding: 0 var(--space-md);
+  }
+
+  /* Tab bar: make scrollable horizontally */
+  .tab-bar {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap !important;
+    white-space: nowrap;
+    padding-bottom: var(--space-xs);
+  }
+
+  .tab-btn {
+    flex-shrink: 0;
+  }
+
+  /* Long currency values in strategy cards & debt */
+  .strategy-card .card-value,
+  .strategy-comparison .stat-value {
+    font-size: var(--font-sm) !important;
+    word-break: break-all;
+  }
+
+  /* Section headers: ensure wrapping */
+  .section-header {
+    gap: var(--space-sm) !important;
+  }
+
+  .section-header .section-title {
+    font-size: var(--font-md) !important;
+  }
+
+  /* Inline forms: full width */
+  .inline-form {
+    gap: var(--space-sm) !important;
+  }
+
+  .inline-form .field {
+    min-width: 0 !important;
+    flex: 1 1 100% !important;
+  }
+
+  /* Content area overflow prevention */
+  .content-area {
+    overflow-x: hidden !important;
+  }
+
+  .content-area > div {
+    max-width: 100%;
+    overflow-x: hidden;
   }
 }
 

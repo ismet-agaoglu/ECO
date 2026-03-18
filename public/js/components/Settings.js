@@ -70,7 +70,7 @@ export class Settings {
           ${recurring.length === 0 ? `
             <p style="color:var(--text-muted);margin-bottom:var(--space-lg)">Henüz tekrarlayan harcama eklenmedi</p>
           ` : `
-            <table class="data-table mb-lg">
+            <div class="table-responsive mb-lg"><table class="data-table">
               <thead>
                 <tr>
                   <th>Açıklama</th>
@@ -98,7 +98,7 @@ export class Settings {
                   `;
                 }).join('')}
               </tbody>
-            </table>
+            </table></div>
           `}
           <button class="btn btn-outline" id="addRecurringBtn">+ Tekrarlayan Harcama Ekle</button>
         </div>

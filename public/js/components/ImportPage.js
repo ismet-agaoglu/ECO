@@ -1,6 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════
 // ImportPage — Veri İçe Aktarma & NLP (Faz 5)
-// Doğal dil giriş, toplu import, review queue
 // ═══════════════════════════════════════════════════════════════════
 
 import { api } from '../services/ApiService.js';
@@ -21,60 +20,60 @@ export class ImportPage {
   renderPage() {
     return `
       <div class="section-header">
-        <h2 class="section-title">📥 Veri İçe Aktarma</h2>
+        <h2 class="section-title">Veri İçe Aktarma</h2>
       </div>
 
-      <!-- NLP Giriş -->
       <div class="card fade-in">
-        <h3 style="font-weight:700;margin-bottom:var(--space-md)">💬 Doğal Dil ile Giriş</h3>
-        <p style="font-size:var(--font-sm);color:var(--text-secondary);margin-bottom:var(--space-md)">
+        <div class="card-header">
+          <h3 class="card-title">Doğal Dil ile Giriş</h3>
+        </div>
+        <p class="card-subtitle mb-md">
           Harcamalarınızı doğal dille yazın. Her satır ayrı işlem olarak algılanır.
         </p>
-        <textarea id="nlpInput" rows="5" placeholder="Örnek:&#10;dün Migros'ta 850 lira harcadım&#10;bugün taksi 120 TL&#10;3 ay telefon taksidi 1200 TL" style="width:100%;padding:var(--space-md);border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text-primary);font-size:var(--font-sm);resize:vertical;font-family:inherit"></textarea>
-        <div style="display:flex;gap:var(--space-sm);margin-top:var(--space-md)">
-          <button class="btn" id="btnParse" style="background:var(--accent-primary);color:white">🔍 Analiz Et</button>
+        <div class="form-group">
+          <textarea id="nlpInput" class="form-input" rows="5" style="resize:vertical;font-family:inherit" placeholder="Örnek:&#10;dün Migros'ta 850 lira harcadım&#10;bugün taksi 120 TL&#10;3 ay telefon taksidi 1200 TL"></textarea>
+        </div>
+        <div class="form-actions" style="justify-content:flex-start">
+          <button class="btn btn-primary" id="btnParse">🔍 Analiz Et</button>
           <button class="btn btn-ghost" id="btnClear">Temizle</button>
         </div>
       </div>
 
-      <!-- Toplu JSON Import -->
-      <div class="card fade-in mt-md">
-        <h3 style="font-weight:700;margin-bottom:var(--space-md)">📋 Toplu Import</h3>
-        <p style="font-size:var(--font-sm);color:var(--text-secondary);margin-bottom:var(--space-sm)">JSON formatında işlem listesi yapıştırın.</p>
-        <textarea id="jsonInput" rows="4" placeholder='[{"date":"2026-03-15","amount":500,"type":"expense","category":"Market","description":"Haftalık alışveriş"}]' style="width:100%;padding:var(--space-md);border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--text-primary);font-size:var(--font-xs);resize:vertical;font-family:monospace"></textarea>
-        <button class="btn" id="btnImportJson" style="background:var(--accent-warning);color:white;margin-top:var(--space-sm)">📥 İşle</button>
+      <div class="card fade-in mt-lg">
+        <div class="card-header">
+          <h3 class="card-title">Toplu JSON Import</h3>
+        </div>
+        <p class="card-subtitle mb-sm">JSON formatında işlem listesi yapıştırın.</p>
+        <div class="form-group">
+          <textarea id="jsonInput" class="form-input" rows="4" style="resize:vertical;font-family:monospace;font-size:var(--font-xs)" placeholder='[{"date":"2026-03-15","amount":500,"type":"expense","category":"Market","description":"Haftalık alışveriş"}]'></textarea>
+        </div>
+        <div class="form-actions" style="justify-content:flex-start">
+          <button class="btn btn-primary" id="btnImportJson" style="background:var(--accent-warning)">📥 İşle</button>
+        </div>
       </div>
 
-      <!-- Review Queue -->
-      <div id="reviewQueue" class="mt-md"></div>
+      <div id="reviewQueue" class="mt-lg"></div>
     `;
   }
 
   bindEvents() {
-    // NLP Parse
     this.container.querySelector('#btnParse')?.addEventListener('click', async () => {
       const input = this.container.querySelector('#nlpInput').value.trim();
       if (!input) return;
-
       const lines = input.split('\n').filter(l => l.trim());
       try {
         const parsed = await api.postNLPParseBatch(lines);
         const items = parsed.map(p => ({
-          date: p.date,
-          amount: p.amount,
-          type: p.type,
+          date: p.date, amount: p.amount, type: p.type,
           description: p.description || p.originalText,
-          merchant: p.merchant,
-          category: null
+          merchant: p.merchant, category: null
         }));
-
         const result = await api.postImportProcess(items, 'nlp');
         this.pendingItems = result.items;
         this.renderReviewQueue(result);
       } catch (err) { this.helpers.onToast('Parse hatası: ' + err.message, 'error'); }
     });
 
-    // JSON Import
     this.container.querySelector('#btnImportJson')?.addEventListener('click', async () => {
       const input = this.container.querySelector('#jsonInput').value.trim();
       try {
@@ -85,7 +84,6 @@ export class ImportPage {
       } catch (err) { this.helpers.onToast('JSON hatası: ' + err.message, 'error'); }
     });
 
-    // Clear
     this.container.querySelector('#btnClear')?.addEventListener('click', () => {
       this.container.querySelector('#nlpInput').value = '';
       this.container.querySelector('#reviewQueue').innerHTML = '';
@@ -99,63 +97,65 @@ export class ImportPage {
 
     queue.innerHTML = `
       <div class="card fade-in">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-md)">
-          <h3 style="font-weight:700">📋 İnceleme Kuyruğu</h3>
-          <div style="display:flex;gap:var(--space-sm)">
-            <span style="font-size:var(--font-xs);padding:4px 8px;background:var(--accent-primary);color:white;border-radius:10px">${stats.ready} hazır</span>
-            <span style="font-size:var(--font-xs);padding:4px 8px;background:var(--accent-warning);color:white;border-radius:10px">${stats.reviewRequired} inceleme</span>
-            <span style="font-size:var(--font-xs);padding:4px 8px;background:var(--accent-danger);color:white;border-radius:10px">${stats.rejected} reddedildi</span>
+        <div class="card-header">
+          <h3 class="card-title">İnceleme Kuyruğu</h3>
+          <div class="flex gap-sm">
+            <span class="badge badge-success">${stats.ready} hazır</span>
+            <span class="badge badge-warning">${stats.reviewRequired} inceleme</span>
+            <span class="badge badge-danger">${stats.rejected} reddedildi</span>
           </div>
         </div>
 
-        <table style="width:100%;font-size:var(--font-sm);border-collapse:collapse">
-          <thead>
-            <tr style="border-bottom:1px solid var(--border-color)">
-              <th style="text-align:left;padding:var(--space-xs)">Durum</th>
-              <th style="text-align:left;padding:var(--space-xs)">Tarih</th>
-              <th style="text-align:left;padding:var(--space-xs)">Açıklama</th>
-              <th style="text-align:left;padding:var(--space-xs)">Kategori</th>
-              <th style="text-align:right;padding:var(--space-xs)">Tutar</th>
-              <th style="text-align:center;padding:var(--space-xs)">Güven</th>
-              <th style="text-align:center;padding:var(--space-xs)">İşlem</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${items.map((item, idx) => {
-              const statusColors = { ready: 'var(--accent-primary)', review_required: 'var(--accent-warning)', rejected: 'var(--accent-danger)' };
-              const statusLabels = { ready: '✅', review_required: '⚠️', rejected: '❌' };
-              const conf = Math.round((item._overallConfidence || 0) * 100);
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Durum</th>
+                <th>Tarih</th>
+                <th>Açıklama</th>
+                <th>Kategori</th>
+                <th class="text-right">Tutar</th>
+                <th class="text-center">Güven</th>
+                <th class="text-center">İşlem</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${items.map((item, idx) => {
+                const statusLabels = { ready: '✅ Hazır', review_required: '⚠️ İncele', rejected: '❌ Red' };
+                const statusClass = { ready: 'badge-success', review_required: 'badge-warning', rejected: 'badge-danger' };
+                const conf = Math.round((item._overallConfidence || 0) * 100);
+                const confClass = conf >= 70 ? 'badge-success' : conf >= 40 ? 'badge-warning' : 'badge-danger';
 
-              return `
-                <tr style="border-bottom:1px solid var(--border-color)" data-idx="${idx}">
-                  <td style="padding:var(--space-xs)">${statusLabels[item._status] || '?'}</td>
-                  <td style="padding:var(--space-xs)">${item.date || '—'}</td>
-                  <td style="padding:var(--space-xs)">${item.description || '—'}</td>
-                  <td style="padding:var(--space-xs)">${item.category || '<em style="color:var(--text-muted)">yok</em>'}</td>
-                  <td style="text-align:right;padding:var(--space-xs);font-weight:600">${formatCurrency(item.amount)}</td>
-                  <td style="text-align:center;padding:var(--space-xs)">
-                    <span style="color:${conf >= 70 ? 'var(--accent-primary)' : conf >= 40 ? 'var(--accent-warning)' : 'var(--accent-danger)'}">%${conf}</span>
-                  </td>
-                  <td style="text-align:center;padding:var(--space-xs)">
-                    <button class="btn btn-ghost btn-sm approve-btn" data-idx="${idx}" style="color:var(--accent-primary)">✓</button>
-                    <button class="btn btn-ghost btn-sm reject-btn" data-idx="${idx}" style="color:var(--accent-danger)">✕</button>
-                  </td>
-                </tr>
-                ${item._errors?.length > 0 ? `<tr><td colspan="7" style="padding:2px var(--space-xs);font-size:var(--font-xxs);color:var(--accent-danger)">${item._errors.join(', ')}</td></tr>` : ''}
-                ${item._warnings?.length > 0 ? `<tr><td colspan="7" style="padding:2px var(--space-xs);font-size:var(--font-xxs);color:var(--accent-warning)">${item._warnings.join(', ')}</td></tr>` : ''}
-              `;
-            }).join('')}
-          </tbody>
-        </table>
+                return `
+                  <tr data-idx="${idx}">
+                    <td><span class="badge ${statusClass[item._status] || 'badge-info'}">${statusLabels[item._status] || '?'}</span></td>
+                    <td>${item.date || '—'}</td>
+                    <td>${item.description || '—'}</td>
+                    <td>${item.category || '<span class="card-subtitle">Belirsiz</span>'}</td>
+                    <td class="text-right amount-expense">${formatCurrency(item.amount)}</td>
+                    <td class="text-center"><span class="badge ${confClass}">%${conf}</span></td>
+                    <td class="text-center">
+                      <div class="action-pair">
+                        <button class="btn btn-ghost btn-sm approve-btn" data-idx="${idx}" title="Onayla">✓</button>
+                        <button class="btn btn-ghost btn-sm btn-danger reject-btn" data-idx="${idx}" title="Reddet">✕</button>
+                      </div>
+                    </td>
+                  </tr>
+                  ${item._errors?.length > 0 ? `<tr><td colspan="7" class="card-subtitle" style="color:var(--accent-danger);padding:2px var(--space-sm)">${item._errors.join(', ')}</td></tr>` : ''}
+                  ${item._warnings?.length > 0 ? `<tr><td colspan="7" class="card-subtitle" style="color:var(--accent-warning);padding:2px var(--space-sm)">${item._warnings.join(', ')}</td></tr>` : ''}
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
 
-        <div style="margin-top:var(--space-md);display:flex;gap:var(--space-sm)">
-          <button class="btn" id="btnCommitAll" style="background:var(--accent-primary);color:white">✅ Tümünü Kaydet (${stats.ready})</button>
+        <div class="form-actions mt-md" style="justify-content:flex-start">
+          <button class="btn btn-primary" id="btnCommitAll">✅ Tümünü Kaydet (${stats.ready})</button>
           <button class="btn btn-ghost" id="btnApproveAll">Tümünü Onayla</button>
         </div>
       </div>
     `;
 
-    // Approve/Reject buttons
     queue.querySelectorAll('.approve-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const idx = parseInt(btn.dataset.idx);
@@ -173,7 +173,6 @@ export class ImportPage {
       });
     });
 
-    // Tümünü onayla
     queue.querySelector('#btnApproveAll')?.addEventListener('click', () => {
       this.pendingItems.forEach(item => {
         if (item._status !== 'rejected') item._status = 'approved';
@@ -181,16 +180,21 @@ export class ImportPage {
       this.helpers.onToast('Tümü onaylandı', 'success');
     });
 
-    // Kaydet
     queue.querySelector('#btnCommitAll')?.addEventListener('click', async () => {
       const toCommit = this.pendingItems.filter(i => i._status === 'ready' || i._status === 'approved');
       if (toCommit.length === 0) { this.helpers.onToast('Kaydedilecek kayıt yok', 'error'); return; }
-
       try {
         const result = await api.postImportCommit(toCommit);
-        this.helpers.onToast(`${result.committed} kayıt eklendi`, 'success');
+        this.helpers.onToast(`${result.committed} kayıt başarıyla eklendi`, 'success');
         this.pendingItems = [];
-        queue.innerHTML = '<div class="card fade-in"><p style="color:var(--accent-primary);font-weight:700">✅ İçe aktarma tamamlandı!</p></div>';
+        queue.innerHTML = `
+          <div class="card fade-in">
+            <div class="empty-state">
+              <div class="empty-state-icon">✅</div>
+              <p class="empty-state-text">İçe aktarma tamamlandı!</p>
+            </div>
+          </div>
+        `;
       } catch (err) { this.helpers.onToast('Kayıt hatası: ' + err.message, 'error'); }
     });
   }
