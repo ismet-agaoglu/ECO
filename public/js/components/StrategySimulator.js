@@ -69,34 +69,54 @@ export class StrategySimulator {
       }
 
       const icons = { avalanche: '🏔️', snowball: '⛄', minimum: '🐢', aggressive: '🚀', balanced: '⚖️' };
+      const descriptions = {
+        avalanche: 'En yuksek faizli borca oncelik verir. Her ay minimum odemeleri yaptiktan sonra kalan ekstra odemeyi en yuksek faizli borca yonlendirir. Toplam faiz maliyetini en aza indirir.',
+        snowball: 'En kucuk bakiyeli borcu once kapatir. Psikolojik motivasyon saglar. Kapanan her borc bir sonrakine aktarilir.',
+        minimum: 'Sadece minimum odemeleri yapar. En yavas ve en pahali yontem. Ek odeme yapilmaz.',
+        aggressive: `Aylik fazlanizin tamamini (${data.avgMonthlySurplus > 0 ? formatCurrency(data.avgMonthlySurplus) : '?'}) borc odemesine yonlendirir. En hizli kapanma suresi.`,
+        balanced: `Aylik fazlanizin %60'ini borc odemesine, %40'ini tasarrufa ayirir. Hem borc azalir hem birikim artar.`
+      };
       const best = [...data.strategies].sort((a, b) => a.totalInterest - b.totalInterest)[0];
       const minStrategy = data.strategies.find(s => s.name === 'minimum');
       const maxInterest = Math.max(...data.strategies.map(s => s.totalInterest), 1);
 
       el.innerHTML = `
+        ${data.avgMonthlySurplus > 0 ? `
+          <div class="card mb-lg fade-in" style="border-left:3px solid var(--accent-primary)">
+            <p style="font-size:var(--font-sm)">Ortalama aylik fazlaniz: <strong>${formatCurrency(data.avgMonthlySurplus)}</strong> — Bu tutar ekstra odeme kapasitenizidir.</p>
+          </div>
+        ` : ''}
         <div style="display:grid;gap:var(--space-lg)">
           ${data.strategies.map(s => {
-            const isBest = s.name === best.name;
-            const saving = minStrategy ? minStrategy.totalInterest - s.totalInterest : 0;
-            const barW = (s.totalInterest / maxInterest) * 100;
+            const isBest = s.name === best.name && s.converged;
+            const saving = minStrategy && s.converged ? minStrategy.totalInterest - s.totalInterest : 0;
+            const barW = s.converged ? (s.totalInterest / maxInterest) * 100 : 100;
+            const desc = descriptions[s.name] || '';
+            const cannotConverge = !s.converged;
+            const displayMonths = cannotConverge ? '∞' : s.totalMonths + ' ay';
+            const displayInterest = cannotConverge ? 'Sınırsız ↑' : formatCurrency(s.totalInterest);
+            const bgColor = cannotConverge ? 'var(--accent-danger)' : isBest ? 'var(--accent-primary)' : 'var(--accent-danger)';
             return `
               <div class="card fade-in" style="${isBest ? 'border:1px solid var(--accent-primary);box-shadow:0 0 20px rgba(0,255,170,0.1)' : ''}">
-                ${isBest ? '<div style="position:absolute;top:-10px;right:16px;background:var(--accent-primary);color:var(--bg-primary);padding:2px 12px;border-radius:10px;font-size:var(--font-xs);font-weight:700">EN İYİ</div>' : ''}
-                <div class="flex-between mb-md">
+                ${isBest ? '<div style="position:absolute;top:-10px;right:16px;background:var(--accent-primary);color:var(--bg-primary);padding:2px 12px;border-radius:10px;font-size:var(--font-xs);font-weight:700">EN IYI</div>' : ''}
+                <div class="flex-between mb-sm">
                   <h3 style="font-weight:700">${icons[s.name] || '📊'} ${s.label}</h3>
-                  <span style="font-size:var(--font-sm);color:var(--text-muted)">${s.totalMonths} ay</span>
+                  <span style="font-size:var(--font-sm);color:${cannotConverge ? 'var(--accent-danger)' : 'var(--text-muted)'}">${displayMonths}</span>
                 </div>
+                ${desc ? `<p style="font-size:var(--font-xs);color:var(--text-muted);margin-bottom:var(--space-md);line-height:1.5">${desc}</p>` : ''}
                 <div class="flex-between mb-sm">
                   <span style="font-size:var(--font-sm)">Toplam Faiz</span>
-                  <span style="font-weight:600;color:var(--accent-danger)">${formatCurrency(s.totalInterest)}</span>
+                  <span style="font-weight:600;color:var(--accent-danger)">${displayInterest}</span>
                 </div>
                 <div class="progress-bar-container mb-md">
-                  <div class="progress-bar" style="width:${barW}%;background:${isBest ? 'var(--accent-primary)' : 'var(--accent-danger)'}"></div>
+                  <div class="progress-bar" style="width:${Math.min(100, barW)}%;background:${bgColor}"></div>
                 </div>
-                ${saving > 0 ? `
+                ${cannotConverge ? `
+                  <p style="font-size:var(--font-xs);color:var(--accent-danger);font-weight:600">⚠️ Ödeme tutarı aylık faizi karşılamıyor. Borç büyümeye devam edecek.</p>
+                ` : ''}
+                ${!cannotConverge && saving > 0 ? `
                   <p style="font-size:var(--font-xs);color:var(--accent-primary)">💰 Minimum ödemeye kıyasla ${formatCurrency(saving)} faiz tasarrufu</p>
                 ` : ''}
-                ${s.totalMonths >= 600 ? '<p style="font-size:var(--font-xs);color:var(--accent-danger)">⚠️ Ödeme ile anapara karşılanamıyor</p>' : ''}
               </div>
             `;
           }).join('')}
@@ -108,12 +128,14 @@ export class StrategySimulator {
             <thead><tr><th>Strateji</th><th style="text-align:right">Süre</th><th style="text-align:right">Toplam Faiz</th><th style="text-align:right">Faiz Tasarrufu</th></tr></thead>
             <tbody>
               ${data.strategies.map(s => {
-                const saving = minStrategy ? minStrategy.totalInterest - s.totalInterest : 0;
-                return `<tr ${s.name === best.name ? 'style="background:rgba(0,255,170,0.05)"' : ''}>
+                const saving = minStrategy && s.converged ? minStrategy.totalInterest - s.totalInterest : 0;
+                const displayMonths = !s.converged ? '∞' : s.totalMonths + ' ay';
+                const displayFaiz = !s.converged ? 'Sınırsız ↑' : formatCurrency(s.totalInterest);
+                return `<tr ${s.name === best.name && s.converged ? 'style="background:rgba(0,255,170,0.05)"' : ''}>
                   <td>${icons[s.name] || ''} ${s.label}</td>
-                  <td class="text-right">${s.totalMonths >= 600 ? '∞' : s.totalMonths + ' ay'}</td>
-                  <td class="text-right amount-expense">${formatCurrency(s.totalInterest)}</td>
-                  <td class="text-right amount-income">${saving > 0 ? formatCurrency(saving) : '-'}</td>
+                  <td class="text-right" style="color:${!s.converged ? 'var(--accent-danger)' : ''}">${displayMonths}</td>
+                  <td class="text-right" style="color:${!s.converged ? 'var(--accent-danger)' : 'var(--accent-danger)'}">${displayFaiz}</td>
+                  <td class="text-right amount-income">${!s.converged ? 'N/A' : saving > 0 ? formatCurrency(saving) : '-'}</td>
                 </tr>`;
               }).join('')}
             </tbody>
@@ -122,7 +144,7 @@ export class StrategySimulator {
 
         ${data.avgMonthlySurplus > 0 ? `
           <div class="card mt-lg fade-in" style="border-left:3px solid var(--accent-primary)">
-            <p style="font-size:var(--font-sm)">💡 Ortalama aylık fazlanız: <strong>${formatCurrency(data.avgMonthlySurplus)}</strong>. Tamamını borca yönlendirirseniz "Agresif" strateji uygulanır.</p>
+            <p style="font-size:var(--font-sm)">Ortalama aylik fazlaniz: <strong>${formatCurrency(data.avgMonthlySurplus)}</strong>. Tamamini borca yonlendirirseniz "Agresif" strateji uygulanir.</p>
           </div>
         ` : ''}
       `;

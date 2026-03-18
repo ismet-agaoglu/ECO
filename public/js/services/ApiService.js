@@ -36,6 +36,13 @@ class ApiServiceClass {
   deleteDebt(id) { return this.request(`/debts/${id}`, { method: 'DELETE' }); }
   addDebtPayment(id, data) { return this.request(`/debts/${id}/payments`, { method: 'POST', body: data }); }
 
+  // Accounts
+  getAccounts() { return this.request('/accounts'); }
+  addAccount(data) { return this.request('/accounts', { method: 'POST', body: data }); }
+  updateAccount(id, data) { return this.request(`/accounts/${id}`, { method: 'PUT', body: data }); }
+  deleteAccount(id) { return this.request(`/accounts/${id}`, { method: 'DELETE' }); }
+  depositAccount(id, data) { return this.request(`/accounts/${id}/deposit`, { method: 'POST', body: data }); }
+
   // Installments
   getInstallments() { return this.request('/installments'); }
   addInstallment(data) { return this.request('/installments', { method: 'POST', body: data }); }

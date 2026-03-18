@@ -13,7 +13,15 @@
       "Bash(curl -s http://localhost:3000/api/notifications)",
       "Bash(curl -s -H \"Authorization: token [REDACTED]\" -X POST https://api.github.com/user/repos -d ...)",
       "Bash(git push:*)",
-      "Bash(timeout 5 curl -s http://localhost:3000)"
+      "Bash(timeout 5 curl -s http://localhost:3000)",
+      "Bash(node -c public/js/components/AnalyticsPage.js)",
+      "Bash(node -c public/js/components/StrategySimulator.js)",
+      "Bash(node -c public/js/components/DebtManager.js)",
+      "Bash(node -c public/js/services/ApiService.js)",
+      "Bash(node -c public/js/utils/constants.js)",
+      "Bash(node --input-type=module -e \"import\\(''''./public/js/components/AnalyticsPage.js''''\\)\")",
+      "Bash(node -c routes/api.js)",
+      "Bash(node -e \"require\\(''./routes/api.js''\\)\")"
     ]
   }
 }

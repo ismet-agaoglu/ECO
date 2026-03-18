@@ -28,31 +28,303 @@ export class DebtManager {
     this.container.innerHTML = '<div class="loading">Yükleniyor...</div>';
 
     try {
-      const [debts, analysis] = await Promise.all([
+      const [debts, analysis, accounts] = await Promise.all([
         api.getDebts(),
-        api.getDebtAnalysis(0)
+        api.getDebtAnalysis(0),
+        api.getAccounts()
       ]);
 
       this.debts = debts;
+      this.accounts = accounts;
+
+      const totalAccountBalance = accounts.reduce((s, a) => s + (a.balance || 0), 0);
+      const totalDebt = debts.reduce((s, d) => s + getBalance(d), 0);
+      const netWorth = totalAccountBalance - totalDebt;
 
       this.container.innerHTML = `
         <div class="section-header">
-          <h2 class="section-title">Kredili Ürünler & Borçlar</h2>
+          <h2 class="section-title">Finansal Urunler</h2>
           <div class="flex gap-sm">
-            <button class="btn btn-outline" id="addChargeBtn">+ Borç Ekle</button>
-            <button class="btn btn-primary" id="addDebtBtn">+ Ürün Ekle</button>
+            <button class="btn btn-outline" id="addAccountBtn">+ Hesap Ekle</button>
+            <button class="btn btn-outline" id="addChargeBtn">+ Borc Ekle</button>
+            <button class="btn btn-primary" id="addDebtBtn">+ Urun Ekle</button>
           </div>
         </div>
+
+        <div class="stats-grid mb-lg">
+          <div class="card stat-card fade-in">
+            <p class="card-title">Toplam Hesap Bakiyesi</p>
+            <p class="card-value positive">${formatCurrency(totalAccountBalance)}</p>
+          </div>
+          <div class="card stat-card fade-in">
+            <p class="card-title">Toplam Borc</p>
+            <p class="card-value negative">${formatCurrency(totalDebt)}</p>
+          </div>
+          <div class="card stat-card fade-in">
+            <p class="card-title">Net Varlik (Hesaplar - Borclar)</p>
+            <p class="card-value" style="color:${netWorth >= 0 ? 'var(--accent-primary)' : 'var(--accent-danger)'}">${formatCurrency(netWorth)}</p>
+          </div>
+        </div>
+
+        ${this.renderAccountCards(accounts)}
         ${this.renderDebtCards(debts, analysis)}
         ${this.renderStrategyComparison(analysis)}
         ${this.renderSimulator(debts)}
       `;
 
       this.bindEvents(debts);
+      this.bindAccountEvents(accounts);
     } catch (err) {
       this.container.innerHTML = '<div class="empty-state"><p>Veri yüklenemedi</p></div>';
       console.error(err);
     }
+  }
+
+  renderAccountCards(accounts) {
+    if (accounts.length === 0) {
+      return `
+        <div class="section-header mt-lg">
+          <h3 class="section-title">Banka Hesaplari</h3>
+        </div>
+        <div class="empty-state card mb-lg">
+          <div class="empty-state-icon">🏦</div>
+          <p class="empty-state-text">Henuz banka hesabi eklenmedi</p>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="section-header mt-lg">
+        <h3 class="section-title">Banka Hesaplari</h3>
+      </div>
+      <div class="debt-grid mb-lg">
+        ${accounts.map(acc => `
+          <div class="card debt-card fade-in">
+            <div class="flex-between mb-md">
+              <h3 style="font-weight:700">${acc.icon || '🏦'} ${acc.name}</h3>
+              <span class="debt-type-badge">${acc.type === 'savings' ? 'Birikim' : 'Vadesiz'}</span>
+            </div>
+            <div class="debt-meta">
+              <div class="debt-meta-item">
+                <span class="debt-meta-label">Banka</span>
+                <span class="debt-meta-value">${acc.bankName || '-'}</span>
+              </div>
+              <div class="debt-meta-item">
+                <span class="debt-meta-label">Bakiye</span>
+                <span class="debt-meta-value" style="color:var(--accent-primary)">${formatCurrency(acc.balance || 0)}</span>
+              </div>
+            </div>
+            <div class="flex gap-sm mt-md">
+              <button class="btn btn-primary btn-sm deposit-account" data-id="${acc.id}" data-action="deposit" style="flex:1">+ Para Ekle</button>
+              <button class="btn btn-outline btn-sm deposit-account" data-id="${acc.id}" data-action="withdraw" style="flex:1">- Para Cek</button>
+            </div>
+            <div class="flex gap-sm mt-sm">
+              <button class="btn btn-outline btn-sm edit-account" data-id="${acc.id}" style="flex:1">Duzenle</button>
+              <button class="btn btn-outline btn-sm delete-account" data-id="${acc.id}" style="flex:1">Sil</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  bindAccountEvents(accounts) {
+    document.getElementById('addAccountBtn')?.addEventListener('click', () => this.showAddAccountForm());
+
+    this.container.querySelectorAll('.deposit-account').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const acc = accounts.find(a => a.id === btn.dataset.id);
+        const action = btn.dataset.action;
+        if (acc) this.showDepositForm(acc, action);
+      });
+    });
+
+    this.container.querySelectorAll('.edit-account').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const acc = accounts.find(a => a.id === btn.dataset.id);
+        if (acc) this.showEditAccountForm(acc);
+      });
+    });
+
+    this.container.querySelectorAll('.delete-account').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (confirm('Bu hesabi silmek istediginize emin misiniz?')) {
+          await api.deleteAccount(btn.dataset.id);
+          this.onToast('Hesap silindi', 'success');
+          this.render();
+        }
+      });
+    });
+  }
+
+  showAddAccountForm() {
+    const today = new Date().toISOString().split('T')[0];
+    this.openModal('Banka Hesabi Ekle', `
+      <form id="addAccountForm">
+        <div class="form-group">
+          <label class="form-label">Hesap Adi</label>
+          <input class="form-input" type="text" name="name" placeholder="Orn: Garanti Vadesiz" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Banka Adi</label>
+          <input class="form-input" type="text" name="bankName" placeholder="Orn: Garanti BBVA">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Baslangic Bakiye (TL)</label>
+          <input class="form-input" type="number" name="balance" step="1" min="0" value="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Hesap Turu</label>
+          <select class="form-select" name="type">
+            <option value="checking">Vadesiz Hesap</option>
+            <option value="savings">Birikim Hesabi</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ikon</label>
+          <select class="form-select" name="icon">
+            <option value="🏦">🏦 Banka</option>
+            <option value="💰">💰 Para</option>
+            <option value="🏧">🏧 ATM</option>
+            <option value="💵">💵 Nakit</option>
+            <option value="🪙">🪙 Birikim</option>
+          </select>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-outline" id="cancelAccountBtn">Iptal</button>
+          <button type="submit" class="btn btn-primary">Kaydet</button>
+        </div>
+      </form>
+    `);
+
+    document.getElementById('cancelAccountBtn')?.addEventListener('click', () => this.closeModal());
+    document.getElementById('addAccountForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const form = e.target;
+      const data = {
+        name: form.name.value,
+        bankName: form.bankName.value,
+        balance: parseFloat(form.balance.value) || 0,
+        type: form.type.value,
+        icon: form.icon.value
+      };
+      try {
+        await api.addAccount(data);
+        this.onToast('Hesap eklendi!', 'success');
+        this.closeModal();
+        this.render();
+      } catch (err) {
+        this.onToast('Hata: ' + err.message, 'error');
+      }
+    });
+  }
+
+  showDepositForm(account, action) {
+    const isDeposit = action === 'deposit';
+    const title = isDeposit ? `${account.name} — Para Ekle` : `${account.name} — Para Cek`;
+    const today = new Date().toISOString().split('T')[0];
+
+    this.openModal(title, `
+      <form id="depositForm">
+        <div class="form-group">
+          <label class="form-label">Tutar (TL)</label>
+          <input class="form-input" type="number" name="amount" step="1" min="1" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Aciklama</label>
+          <input class="form-input" type="text" name="description" placeholder="Orn: Maas yatirma">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tarih</label>
+          <input class="form-input" type="date" name="date" value="${today}">
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-outline" id="cancelDepositBtn">Iptal</button>
+          <button type="submit" class="btn btn-primary">${isDeposit ? 'Para Ekle' : 'Para Cek'}</button>
+        </div>
+      </form>
+    `);
+
+    document.getElementById('cancelDepositBtn')?.addEventListener('click', () => this.closeModal());
+    document.getElementById('depositForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const form = e.target;
+      const amount = parseFloat(form.amount.value) || 0;
+      const data = {
+        amount: isDeposit ? amount : -amount,
+        description: form.description.value || '',
+        date: form.date.value
+      };
+      try {
+        await api.depositAccount(account.id, data);
+        this.onToast(`${formatCurrency(amount)} ${isDeposit ? 'eklendi' : 'cekildi'}`, 'success');
+        this.closeModal();
+        this.render();
+      } catch (err) {
+        this.onToast('Hata: ' + err.message, 'error');
+      }
+    });
+  }
+
+  showEditAccountForm(account) {
+    this.openModal('Hesap Duzenle', `
+      <form id="editAccountForm">
+        <div class="form-group">
+          <label class="form-label">Hesap Adi</label>
+          <input class="form-input" type="text" name="name" value="${account.name}" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Banka Adi</label>
+          <input class="form-input" type="text" name="bankName" value="${account.bankName || ''}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Bakiye (TL)</label>
+          <input class="form-input" type="number" name="balance" value="${account.balance || 0}" step="1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Hesap Turu</label>
+          <select class="form-select" name="type">
+            <option value="checking" ${account.type === 'checking' ? 'selected' : ''}>Vadesiz Hesap</option>
+            <option value="savings" ${account.type === 'savings' ? 'selected' : ''}>Birikim Hesabi</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ikon</label>
+          <select class="form-select" name="icon">
+            <option value="🏦" ${account.icon === '🏦' ? 'selected' : ''}>🏦 Banka</option>
+            <option value="💰" ${account.icon === '💰' ? 'selected' : ''}>💰 Para</option>
+            <option value="🏧" ${account.icon === '🏧' ? 'selected' : ''}>🏧 ATM</option>
+            <option value="💵" ${account.icon === '💵' ? 'selected' : ''}>💵 Nakit</option>
+            <option value="🪙" ${account.icon === '🪙' ? 'selected' : ''}>🪙 Birikim</option>
+          </select>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-outline" id="cancelEditAccBtn">Iptal</button>
+          <button type="submit" class="btn btn-primary">Kaydet</button>
+        </div>
+      </form>
+    `);
+
+    document.getElementById('cancelEditAccBtn')?.addEventListener('click', () => this.closeModal());
+    document.getElementById('editAccountForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const form = e.target;
+      const data = {
+        name: form.name.value,
+        bankName: form.bankName.value,
+        balance: parseFloat(form.balance.value) || 0,
+        type: form.type.value,
+        icon: form.icon.value
+      };
+      try {
+        await api.updateAccount(account.id, data);
+        this.onToast('Hesap guncellendi!', 'success');
+        this.closeModal();
+        this.render();
+      } catch (err) {
+        this.onToast('Hata: ' + err.message, 'error');
+      }
+    });
   }
 
   renderDebtCards(debts, analysis) {

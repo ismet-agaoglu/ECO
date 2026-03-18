@@ -8,7 +8,7 @@ const CrisisEngine = require('../services/CrisisEngine');
 
 // ─── Data Directory Setup ──────────────────────────────────────────
 const DATA_DIR = path.join(__dirname, '..', 'data');
-const COLLECTIONS = ['transactions', 'debts', 'categories', 'budgets', 'recurring', 'settings', 'installments', 'notes', 'auditlog', 'crisis_transactions', 'goals', 'snapshots'];
+const COLLECTIONS = ['transactions', 'debts', 'categories', 'budgets', 'recurring', 'settings', 'installments', 'notes', 'auditlog', 'crisis_transactions', 'goals', 'snapshots', 'accounts'];
 
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -378,6 +378,80 @@ router.delete('/debts/:id', (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
+// ACCOUNTS (Bank accounts — checking / savings)
+// ═══════════════════════════════════════════════════════════════════
+
+router.get('/accounts', (req, res) => {
+  res.json(readData('accounts'));
+});
+
+router.post('/accounts', (req, res) => {
+  const accounts = readData('accounts');
+  const newAccount = {
+    id: generateId(),
+    name: req.body.name || 'Hesap',
+    bankName: req.body.bankName || '',
+    balance: parseFloat(req.body.balance) || 0,
+    type: req.body.type || 'checking',
+    icon: req.body.icon || '🏦',
+    createdAt: new Date().toISOString()
+  };
+  accounts.push(newAccount);
+  writeData('accounts', accounts);
+  addAuditLog('create', 'account', newAccount.id, 'manual', { name: newAccount.name });
+  res.status(201).json(newAccount);
+});
+
+router.put('/accounts/:id', (req, res) => {
+  const accounts = readData('accounts');
+  const idx = accounts.findIndex(a => a.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Hesap bulunamadi' });
+  accounts[idx] = { ...accounts[idx], ...req.body, id: req.params.id };
+  writeData('accounts', accounts);
+  res.json(accounts[idx]);
+});
+
+router.delete('/accounts/:id', (req, res) => {
+  let accounts = readData('accounts');
+  accounts = accounts.filter(a => a.id !== req.params.id);
+  writeData('accounts', accounts);
+  res.json({ success: true });
+});
+
+router.post('/accounts/:id/deposit', (req, res) => {
+  const accounts = readData('accounts');
+  const idx = accounts.findIndex(a => a.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Hesap bulunamadi' });
+
+  const amount = parseFloat(req.body.amount) || 0;
+  const description = req.body.description || '';
+  const date = req.body.date || new Date().toISOString().split('T')[0];
+
+  accounts[idx].balance += amount;
+  writeData('accounts', accounts);
+
+  // Create a transaction record
+  const transactions = readData('transactions');
+  const txType = amount >= 0 ? 'income' : 'expense';
+  const tx = {
+    id: generateId(),
+    date,
+    type: txType,
+    amount: Math.abs(amount),
+    category: txType === 'income' ? 'cat-ek-gelir' : 'cat-diger',
+    description: `${accounts[idx].name}: ${description}`,
+    source: 'manual',
+    status: 'approved',
+    createdAt: new Date().toISOString()
+  };
+  transactions.push(tx);
+  writeData('transactions', transactions);
+
+  addAuditLog('deposit', 'account', req.params.id, 'manual', { amount, description });
+  res.json({ account: accounts[idx], transaction: tx });
+});
+
+// ═══════════════════════════════════════════════════════════════════
 // CATEGORIES
 // ═══════════════════════════════════════════════════════════════════
 
@@ -455,6 +529,8 @@ router.post('/recurring', (req, res) => {
     amount: parseFloat(req.body.amount),
     type: req.body.type || 'expense',
     category: req.body.category || 'cat-diger',
+    paymentMethod: req.body.paymentMethod || 'cash', // 'cash' | 'credit_card'
+    creditCardId: req.body.creditCardId || null,      // only if paymentMethod === 'credit_card'
     startYear: parseInt(req.body.startYear || new Date().getFullYear()),
     startMonth: parseInt(req.body.startMonth || (new Date().getMonth() + 1)),
     durationMonths: parseInt(req.body.durationMonths || 12),
@@ -532,24 +608,37 @@ router.get('/summary', (req, res) => {
   const installmentPayments = installments
     .filter(i => i.isActive && (i.installmentCount - i.paidCount) > 0 && !i.creditCardId)
     .reduce((s, i) => s + i.monthlyAmount, 0);
-  const recurringPayments = recurring.filter(r => {
+  const activeRecurring = recurring.filter(r => {
     if (!r.isActive) return false;
     let endMonth = r.startMonth + r.durationMonths - 1;
     let endYear = r.startYear;
     while (endMonth > 12) { endMonth -= 12; endYear++; }
     return (year > r.startYear || (year === r.startYear && month >= r.startMonth)) &&
            (year < endYear || (year === endYear && month <= endMonth));
-  }).reduce((s, r) => s + r.amount, 0);
+  });
+  // Nakit (cash) sabit giderler doğrudan toplam gidere eklenir
+  // Kredi kartı sabit giderler bilgilendirme amaçlıdır (kart borcuna dahil)
+  const cashRecurringPayments = activeRecurring
+    .filter(r => r.type === 'expense' && r.paymentMethod !== 'credit_card')
+    .reduce((s, r) => s + r.amount, 0);
+  const ccRecurringPayments = activeRecurring
+    .filter(r => r.type === 'expense' && r.paymentMethod === 'credit_card')
+    .reduce((s, r) => s + r.amount, 0);
+  const recurringPayments = cashRecurringPayments + ccRecurringPayments;
 
-  const totalObligations = debtMinPayments + installmentPayments + recurringPayments;
+  const totalObligations = debtMinPayments + installmentPayments + cashRecurringPayments;
+
+  const accounts = readData('accounts');
+  const totalAccountBalance = accounts.reduce((s, a) => s + (a.balance || 0), 0);
 
   const budgets = readData('budgets');
   const budget = budgets.find(b => b.year === year && b.month === month);
   const budgetLimit = budget ? budget.totalLimit : 0;
   const remainingBudget = budgetLimit > 0 ? budgetLimit - totalExpense : null;
 
-  // Aylık toplam gider = kredili ürün asgari ödemeleri + nakit/sabit giderler (kira vb.)
-  const monthlyTotalExpense = debtMinPayments + recurringPayments + installmentPayments;
+  // Aylık toplam gider = kredili ürün asgari ödemeleri + nakit sabit giderler + bağımsız taksitler
+  // Kredi kartı üzerinden ödenen sabit giderler kart borcunun parçasıdır, ayrıca eklenmez
+  const monthlyTotalExpense = debtMinPayments + cashRecurringPayments + installmentPayments;
 
   res.json({
     year, month,
@@ -558,11 +647,13 @@ router.get('/summary', (req, res) => {
     monthlyTotalExpense: Math.round(monthlyTotalExpense), // Gerçek aylık gider (kredi ödemeleri + sabit)
     net: totalIncome - monthlyTotalExpense,
     totalDebt,
+    totalAccountBalance: Math.round(totalAccountBalance),
     totalInterestPerMonth: Math.round(totalInterestPerMonth * 100) / 100,
     totalObligations: Math.round(totalObligations),
     debtMinPayments: Math.round(debtMinPayments),
     installmentPayments: Math.round(installmentPayments),
-    recurringPayments: Math.round(recurringPayments),
+    recurringPayments: Math.round(cashRecurringPayments),
+    ccRecurringPayments: Math.round(ccRecurringPayments),
     freeIncome: Math.round(totalIncome - monthlyTotalExpense),
     budgetLimit,
     remainingBudget,
@@ -822,10 +913,13 @@ function calculateStrategy(debts, extraPayment, strategy, installments) {
   }
 
   const allPaid = balances.every(b => b <= 0);
+  const remainingDebt = balances.reduce((s, b) => s + Math.max(0, b), 0);
   return {
-    totalMonths: allPaid ? months : -1,
-    totalInterest: allPaid ? Math.round(totalInterest * 100) / 100 : -1,
-    error: allPaid ? null : `${maxMonths} ayda (30 yıl) kapanmıyor`
+    totalMonths: allPaid ? months : 0,
+    totalInterest: Math.round(totalInterest * 100) / 100,
+    remainingDebt: Math.round(remainingDebt),
+    converged: allPaid,
+    error: allPaid ? null : `Bu stratejiyle borçlar kapanmıyor. Ödeme tutarı aylık faizi karşılamıyor.`
   };
 }
 
@@ -1368,6 +1462,9 @@ router.get('/analytics/ratios', (req, res) => {
   const fixedObligations = recurring.filter(r => r.isActive && r.type === 'expense')
     .reduce((s, r) => s + r.amount, 0);
 
+  const accounts = readData('accounts');
+  const totalAccountBalance = accounts.reduce((s, a) => s + (a.balance || 0), 0);
+
   res.json({
     debtToIncome: totalIncome > 0 ? Math.round((totalDebt / (totalIncome * 12)) * 10000) / 100 : 0,
     fixedObligationRatio: totalIncome > 0 ? Math.round((fixedObligations / totalIncome) * 10000) / 100 : 0,
@@ -1378,7 +1475,9 @@ router.get('/analytics/ratios', (req, res) => {
     totalExpense: Math.round(totalExpense),
     totalDebt: Math.round(totalDebt),
     monthlyInterest: Math.round(totalInterest),
-    fixedObligations: Math.round(fixedObligations)
+    fixedObligations: Math.round(fixedObligations),
+    netWorth: Math.round(totalAccountBalance - totalDebt),
+    liquidAssets: Math.round(totalAccountBalance)
   });
 });
 
@@ -1479,6 +1578,7 @@ router.get('/upcoming-payments', (req, res) => {
   const upcoming = [];
 
   // Recurring expenses for this month
+  const debtsForRecurring = readData('debts');
   recurring.filter(r => r.isActive).forEach(r => {
     let endMonth = r.startMonth + r.durationMonths - 1;
     let endYear = r.startYear;
@@ -1486,20 +1586,25 @@ router.get('/upcoming-payments', (req, res) => {
 
     if ((year > r.startYear || (year === r.startYear && month >= r.startMonth)) &&
         (year < endYear || (year === endYear && month <= endMonth))) {
+      const isCreditCard = r.paymentMethod === 'credit_card';
+      const linkedCard = isCreditCard && r.creditCardId ? debtsForRecurring.find(d => d.id === r.creditCardId) : null;
       upcoming.push({
         type: 'recurring', name: r.description, amount: r.amount,
-        category: r.category, dueDate: `${year}-${String(month).padStart(2, '0')}-01`
+        category: r.category, dueDate: `${year}-${String(month).padStart(2, '0')}-01`,
+        paymentMethod: r.paymentMethod || 'cash',
+        isInfoOnly: isCreditCard, // kredi kartı ile ödenen sabit giderler bilgi amaçlı
+        creditCardId: r.creditCardId || null,
+        creditCardName: linkedCard ? linkedCard.name : null
       });
     }
   });
 
   // Active installments — bilgilendirme amaçlı (kredi kartı borcunun parçası)
   // Taksitler ayrı borç değildir, ilgili ayın taksiti kredi kartı ekstresine yansır
-  const debts = readData('debts');
   installments.filter(i => i.isActive).forEach(inst => {
     const remaining = inst.installmentCount - inst.paidCount;
     if (remaining > 0) {
-      const linkedCard = inst.creditCardId ? debts.find(d => d.id === inst.creditCardId) : null;
+      const linkedCard = inst.creditCardId ? debtsForRecurring.find(d => d.id === inst.creditCardId) : null;
       upcoming.push({
         type: 'installment',
         name: inst.name,
@@ -1517,7 +1622,7 @@ router.get('/upcoming-payments', (req, res) => {
   // Debt minimum payments (credit cards, overdrafts, loans)
   // Kredi kartı: minPayment yoksa ekstre borcunun %40'ı
   // Ek hesap: minPayment yoksa TCMB aylık faiz (%4.25) × bakiye
-  debts.forEach(debt => {
+  debtsForRecurring.forEach(debt => {
     const effectivePayment = getEffectiveMinPayment(debt, installments);
     const debtBalance = getDebtBalance(debt);
     if (debtBalance > 0 && effectivePayment > 0) {

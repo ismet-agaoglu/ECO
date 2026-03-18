@@ -45,54 +45,65 @@ export class Dashboard {
   }
 
   renderStats(summary, budget) {
-    const netClass = summary.net >= 0 ? 'positive' : 'negative';
-    const freeClass = summary.freeIncome >= 0 ? 'positive' : 'negative';
+    const monthlyTotal = summary.monthlyTotalExpense || summary.totalObligations || 0;
+    const freeIncome = summary.totalIncome - monthlyTotal;
+    const freeClass = freeIncome >= 0 ? 'positive' : 'negative';
+
+    // Gider alt kalem sayısı
+    const breakdownItems = [];
+    if (summary.debtMinPayments > 0) breakdownItems.push({ icon: '💳', label: 'Kredili Ürün Ödemeleri', sub: 'KK asgari + ek hesap faiz + kredi taksit', amount: summary.debtMinPayments });
+    if (summary.recurringPayments > 0) breakdownItems.push({ icon: '🔄', label: 'Nakit Sabit Giderler', sub: 'Kira, abonelik vb.', amount: summary.recurringPayments });
+    if (summary.installmentPayments > 0) breakdownItems.push({ icon: '📦', label: 'Bağımsız Taksitler', sub: 'KK dışı taksitler', amount: summary.installmentPayments });
+
     return `
-      <div class="stats-grid">
+      <!-- Gelir vs Gider yan yana -->
+      <div class="stats-grid" style="grid-template-columns: 1fr 1fr">
         <div class="card stat-card income fade-in stagger-1">
           <div class="stat-icon">💰</div>
-          <p class="card-title">Toplam Gelir</p>
+          <p class="card-title">Aylık Gelir</p>
           <p class="card-value positive">${formatCurrency(summary.totalIncome)}</p>
-          <p class="card-subtitle">${summary.transactionCount} işlem</p>
         </div>
         <div class="card stat-card expense fade-in stagger-2">
           <div class="stat-icon">💸</div>
-          <p class="card-title">Toplam Gider</p>
-          <p class="card-value negative">${formatCurrency(summary.totalExpense)}</p>
-        </div>
-        <div class="card stat-card fade-in stagger-3" style="border-left:3px solid var(--accent-warning)">
-          <div class="stat-icon">📋</div>
-          <p class="card-title">Aylık Yükümlülükler</p>
-          <p class="card-value negative">${formatCurrency(summary.totalObligations || 0)}</p>
-          <p class="card-subtitle">${this.renderObligationBreakdown(summary)}</p>
-        </div>
-        <div class="card stat-card fade-in stagger-4" style="border-left:3px solid ${summary.freeIncome >= 0 ? 'var(--accent-primary)' : 'var(--accent-danger)'}">
-          <div class="stat-icon">🎯</div>
-          <p class="card-title">Serbest Gelir</p>
-          <p class="card-value ${freeClass}">${formatCurrency(summary.freeIncome || 0)}</p>
-          <p class="card-subtitle">Gelir − Yükümlülükler</p>
-        </div>
-        <div class="card stat-card net fade-in stagger-5">
-          <div class="stat-icon">📊</div>
-          <p class="card-title">Net Durum</p>
-          <p class="card-value ${netClass}">${formatCurrency(summary.net)}</p>
-        </div>
-        <div class="card stat-card debt fade-in stagger-6">
-          <div class="stat-icon">🏦</div>
-          <p class="card-title">Toplam Borç</p>
-          <p class="card-value negative">${formatCurrency(summary.totalDebt)}</p>
-          <p class="card-subtitle">Aylık faiz: ${formatCurrency(summary.totalInterestPerMonth)}</p>
+          <p class="card-title">Aylık Toplam Gider</p>
+          <p class="card-value negative">${formatCurrency(monthlyTotal)}</p>
+          ${breakdownItems.length > 0 ? `
+            <div style="margin-top:var(--space-sm);font-size:var(--font-xs);color:var(--text-muted);line-height:1.6">
+              ${breakdownItems.map(b => `<div>${b.icon} ${b.label}: <strong>${formatCurrency(b.amount)}</strong></div>`).join('')}
+            </div>
+          ` : ''}
         </div>
       </div>
-    `;
-  }
 
-  renderObligationBreakdown(summary) {
-    const parts = [];
-    if (summary.debtMinPayments > 0) parts.push(`Borç: ${formatCurrency(summary.debtMinPayments)}`);
-    if (summary.installmentPayments > 0) parts.push(`Taksit: ${formatCurrency(summary.installmentPayments)}`);
-    if (summary.recurringPayments > 0) parts.push(`Sabit: ${formatCurrency(summary.recurringPayments)}`);
-    return parts.length > 0 ? parts.join(' · ') : 'Yükümlülük yok';
+      <!-- Elde Kalan -->
+      <div class="card mt-md fade-in stagger-3" style="border-left:3px solid ${freeIncome >= 0 ? 'var(--accent-primary)' : 'var(--accent-danger)'}">
+        <div class="flex-between">
+          <div>
+            <p class="card-title" style="margin-bottom:var(--space-xs)">${freeIncome >= 0 ? '✅' : '⚠️'} Elde Kalan</p>
+            <p style="font-size:var(--font-xs);color:var(--text-muted)">
+              ${formatCurrency(summary.totalIncome)} gelir − ${formatCurrency(monthlyTotal)} gider
+            </p>
+          </div>
+          <p class="card-value ${freeClass}" style="margin:0">${formatCurrency(freeIncome)}</p>
+        </div>
+      </div>
+
+      <!-- Borç Durumu -->
+      ${summary.totalDebt > 0 ? `
+      <div class="stats-grid mt-md" style="grid-template-columns: 1fr 1fr">
+        <div class="card stat-card debt fade-in stagger-4">
+          <div class="stat-icon">🏦</div>
+          <p class="card-title">Toplam Borç Bakiyesi</p>
+          <p class="card-value negative">${formatCurrency(summary.totalDebt)}</p>
+        </div>
+        <div class="card stat-card fade-in stagger-5">
+          <div class="stat-icon">📈</div>
+          <p class="card-title">Aylık Faiz Yükü</p>
+          <p class="card-value negative">${formatCurrency(summary.totalInterestPerMonth)}</p>
+        </div>
+      </div>
+      ` : ''}
+    `;
   }
 
   renderCategoryChart(categories) {
@@ -286,7 +297,8 @@ export class Dashboard {
     // Group by type
     const debtPayments = upcoming.filter(u => u.type === 'debt');
     const installmentPayments = upcoming.filter(u => u.type === 'installment');
-    const recurringPayments = upcoming.filter(u => u.type === 'recurring');
+    const cashRecurring = upcoming.filter(u => u.type === 'recurring' && !u.isInfoOnly);
+    const ccRecurring = upcoming.filter(u => u.type === 'recurring' && u.isInfoOnly);
 
     return `
       <div class="card mt-lg fade-in">
@@ -319,15 +331,27 @@ export class Dashboard {
               </div>
             `).join('')}
           ` : ''}
-          ${recurringPayments.length > 0 ? `
-            <div style="padding:var(--space-xs) var(--space-md);font-size:var(--font-xs);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-top:var(--space-xs)">Sabit Giderler</div>
-            ${recurringPayments.map(u => `
+          ${cashRecurring.length > 0 ? `
+            <div style="padding:var(--space-xs) var(--space-md);font-size:var(--font-xs);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-top:var(--space-xs)">Nakit Sabit Giderler</div>
+            ${cashRecurring.map(u => `
               <div class="recent-item">
                 <div class="recent-info">
-                  <div class="recent-desc">🔄 ${u.name}</div>
-                  <div class="recent-date">Aylık</div>
+                  <div class="recent-desc">💵 ${u.name}</div>
+                  <div class="recent-date">Aylık · Nakit/Havale</div>
                 </div>
                 <div class="recent-amount amount-expense">-${formatCurrency(u.amount)}</div>
+              </div>
+            `).join('')}
+          ` : ''}
+          ${ccRecurring.length > 0 ? `
+            <div style="padding:var(--space-xs) var(--space-md);font-size:var(--font-xs);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-top:var(--space-xs)">Kredi Kartı Sabit Giderler (Bilgi)</div>
+            ${ccRecurring.map(u => `
+              <div class="recent-item" style="opacity:0.7">
+                <div class="recent-info">
+                  <div class="recent-desc">💳 ${u.name}</div>
+                  <div class="recent-date">Aylık${u.creditCardName ? ` · ${u.creditCardName}` : ''}</div>
+                </div>
+                <div class="recent-amount" style="color:var(--text-muted);font-size:var(--font-sm)">${formatCurrency(u.amount)}/ay</div>
               </div>
             `).join('')}
           ` : ''}

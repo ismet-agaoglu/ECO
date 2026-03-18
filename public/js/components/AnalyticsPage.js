@@ -40,10 +40,10 @@ export class AnalyticsPage {
 
   renderRatios(r) {
     const gauges = [
-      { label: 'Borç/Gelir Oranı', value: r.debtToIncome, safe: 40, warn: 60, unit: '%', icon: '🏦' },
-      { label: 'Sabit Yükümlülük', value: r.fixedObligationRatio, safe: 50, warn: 70, unit: '%', icon: '📌' },
-      { label: 'Tasarruf Oranı', value: r.savingsRate, safe: 20, warn: 10, unit: '%', icon: '💰', invert: true },
-      { label: 'Faiz Yükü', value: r.interestBurden, safe: 5, warn: 10, unit: '%', icon: '📉' }
+      { label: 'Toplam Borc / Yillik Gelir', desc: 'Toplam borcunuzun yillik gelirinize orani. %40 alti saglikli', value: r.debtToIncome, safe: 40, warn: 60, unit: '%', icon: '🏦' },
+      { label: 'Sabit Gider Orani', desc: 'Aylik sabit giderlerinizin (kira, fatura, abonelik) gelirinize orani. %50 alti ideal', value: r.fixedObligationRatio, safe: 50, warn: 70, unit: '%', icon: '📌' },
+      { label: 'Tasarruf Orani', desc: 'Gelirinizden harcamalar ciktiktan sonra kalan oran. %20 ustu hedefleyin', value: r.savingsRate, safe: 20, warn: 10, unit: '%', icon: '💰', invert: true },
+      { label: 'Faiz / Gelir Orani', desc: 'Borc faizlerinin aylik gelirinize orani. %5 alti guvenli', value: r.interestBurden, safe: 5, warn: 10, unit: '%', icon: '📉' }
     ];
 
     return `
@@ -65,6 +65,7 @@ export class AnalyticsPage {
               <div class="progress-bar-container mt-sm">
                 <div class="progress-bar" style="width:${Math.min(100, g.value)}%;background:${color}"></div>
               </div>
+              ${g.desc ? `<p style="font-size:var(--font-xs);color:var(--text-muted);margin-top:var(--space-sm);line-height:1.4">${g.desc}</p>` : ''}
             </div>
           `;
         }).join('')}

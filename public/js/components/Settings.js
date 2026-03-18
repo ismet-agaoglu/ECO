@@ -17,13 +17,15 @@ export class Settings {
 
   async render() {
     try {
-      const [budget, recurring, categories] = await Promise.all([
+      const [budget, recurring, categories, debts] = await Promise.all([
         api.getBudget(this.year, this.month),
         api.getRecurring(),
-        api.getCategories()
+        api.getCategories(),
+        api.getDebts()
       ]);
 
       this.categories = categories;
+      this.creditCards = debts.filter(d => d.type === 'credit_card');
 
       this.container.innerHTML = `
         <div class="section-header">
@@ -76,6 +78,7 @@ export class Settings {
                   <th>Açıklama</th>
                   <th>Kategori</th>
                   <th>Tür</th>
+                  <th>Ödeme</th>
                   <th style="text-align:right">Tutar</th>
                   <th>Süre</th>
                   <th></th>
@@ -84,11 +87,16 @@ export class Settings {
               <tbody>
                 ${recurring.map(r => {
                   const cat = this.categories.find(c => c.id === r.category);
+                  const cc = r.creditCardId ? this.creditCards.find(c => c.id === r.creditCardId) : null;
+                  const payLabel = r.paymentMethod === 'credit_card'
+                    ? `💳 ${cc ? cc.name : 'Kredi Kartı'}`
+                    : '💵 Nakit';
                   return `
                     <tr>
                       <td>${r.description}</td>
                       <td>${cat ? cat.icon + ' ' + cat.name : r.category}</td>
                       <td><span class="tag tag-${r.type}">${r.type === 'income' ? 'Gelir' : 'Gider'}</span></td>
+                      <td style="font-size:var(--font-xs)">${payLabel}</td>
                       <td class="text-right amount-${r.type}">${formatCurrency(r.amount)}</td>
                       <td>${r.durationMonths} ay</td>
                       <td>
@@ -176,6 +184,7 @@ export class Settings {
 
   showRecurringForm() {
     const catOptions = this.categories.map(c => `<option value="${c.id}">${c.icon} ${c.name}</option>`).join('');
+    const ccOptions = this.creditCards.map(c => `<option value="${c.id}">💳 ${c.name}</option>`).join('');
     const now = new Date();
 
     this.openModal('Tekrarlayan Harcama Ekle', `
@@ -196,6 +205,23 @@ export class Settings {
             <label class="form-label">Tutar (₺)</label>
             <input class="form-input" type="number" name="amount" step="0.01" min="0" required>
           </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ödeme Türü</label>
+          <select class="form-select" name="paymentMethod" id="recPaymentMethod">
+            <option value="cash">💵 Nakit / Havale</option>
+            <option value="credit_card">💳 Kredi Kartı</option>
+          </select>
+        </div>
+        <div class="form-group" id="recCreditCardGroup" style="display:none">
+          <label class="form-label">Hangi Kredi Kartı?</label>
+          <select class="form-select" name="creditCardId">
+            <option value="">— Kart seçin —</option>
+            ${ccOptions}
+          </select>
+          <p style="font-size:var(--font-xs);color:var(--text-muted);margin-top:var(--space-xs)">
+            Kredi kartıyla ödenen sabit giderler ayrı gider olarak sayılmaz, kart borcuna dahildir
+          </p>
         </div>
         <div class="form-group">
           <label class="form-label">Kategori</label>
@@ -227,16 +253,25 @@ export class Settings {
       </form>
     `);
 
+    // Toggle credit card selector based on payment method
+    document.getElementById('recPaymentMethod')?.addEventListener('change', (e) => {
+      const ccGroup = document.getElementById('recCreditCardGroup');
+      if (ccGroup) ccGroup.style.display = e.target.value === 'credit_card' ? '' : 'none';
+    });
+
     document.getElementById('cancelRecBtn')?.addEventListener('click', () => this.closeModal());
 
     document.getElementById('addRecurringForm')?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const form = e.target;
+      const paymentMethod = form.paymentMethod.value;
       const data = {
         description: form.description.value,
         type: form.type.value,
         amount: parseFloat(form.amount.value),
         category: form.category.value,
+        paymentMethod,
+        creditCardId: paymentMethod === 'credit_card' ? (form.creditCardId.value || null) : null,
         startYear: parseInt(form.startYear.value),
         startMonth: parseInt(form.startMonth.value),
         durationMonths: parseInt(form.durationMonths.value)

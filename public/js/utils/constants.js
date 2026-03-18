@@ -14,7 +14,7 @@ export const NAV_ITEMS = [
   { id: 'tax',           icon: '🧾', label: 'Vergi & Maaş' },
   { id: 'transactions', icon: '💸', label: 'İşlemler' },
   { id: 'installments', icon: '💳', label: 'Taksitler' },
-  { id: 'debts',        icon: '🏦', label: 'Borçlar' },
+  { id: 'debts',        icon: '🏦', label: 'Hesaplar & Borçlar' },
   { id: 'categories',   icon: '📂', label: 'Kategoriler' },
   { id: 'analysis',     icon: '🧠', label: 'Akıllı Analiz' },
   { id: 'behavioral',   icon: '🎭', label: 'Davranışsal' },
