@@ -34,9 +34,36 @@ export class SavingsView {
 
   renderOverview(data) {
     const savingsClass = data.monthlySavings >= 0 ? 'positive' : 'negative';
-    const debtFreeText = data.monthsToPayOffDebt
-      ? `${data.monthsToPayOffDebt} ay (${(data.monthsToPayOffDebt / 12).toFixed(1)} yıl)`
-      : 'Borç yok 🎉';
+
+    let debtFreeText, debtFreeColor, debtFreeSubtext;
+    switch (data.debtPayoffStatus) {
+      case 'no_debt':
+        debtFreeText = 'Borç yok';
+        debtFreeColor = 'var(--accent-primary)';
+        debtFreeSubtext = 'Tebrikler! 🎉';
+        break;
+      case 'payable':
+        const years = Math.floor(data.monthsToPayOffDebt / 12);
+        const months = data.monthsToPayOffDebt % 12;
+        debtFreeText = years > 0 ? `${years} yıl ${months} ay` : `${months} ay`;
+        debtFreeColor = 'var(--accent-warning)';
+        debtFreeSubtext = `Tüm tasarruf borç ödemesine giderse`;
+        break;
+      case 'insufficient':
+        debtFreeText = 'Yetersiz';
+        debtFreeColor = 'var(--accent-danger)';
+        debtFreeSubtext = `Tasarruf (${formatCurrency(data.monthlySavings)}) aylık faizi (${formatCurrency(data.totalMonthlyInterest)}) karşılamıyor`;
+        break;
+      case 'negative_savings':
+        debtFreeText = 'Açık var';
+        debtFreeColor = 'var(--accent-danger)';
+        debtFreeSubtext = `Aylık ${formatCurrency(Math.abs(data.monthlySavings))} açık — borç büyüyor`;
+        break;
+      default:
+        debtFreeText = '—';
+        debtFreeColor = 'var(--text-muted)';
+        debtFreeSubtext = '';
+    }
 
     return `
       <div class="stats-grid">
@@ -54,12 +81,22 @@ export class SavingsView {
           <div class="stat-icon">📈</div>
           <p class="card-title">Aylık Tasarruf</p>
           <p class="card-value ${savingsClass}">${formatCurrency(data.monthlySavings)}</p>
+          ${data.totalMonthlyInterest > 0 ? `<p class="card-subtitle">Aylık faiz yükü: ${formatCurrency(data.totalMonthlyInterest)}</p>` : ''}
         </div>
         <div class="card stat-card debt fade-in stagger-4">
           <div class="stat-icon">🎯</div>
           <p class="card-title">Borçsuz Kalma</p>
-          <p class="card-value" style="font-size:var(--font-lg);color:var(--accent-warning)">${debtFreeText}</p>
+          <p class="card-value" style="font-size:var(--font-lg);color:${debtFreeColor}">${debtFreeText}</p>
+          ${debtFreeSubtext ? `<p class="card-subtitle">${debtFreeSubtext}</p>` : ''}
         </div>
+        ${data.totalDebt > 0 ? `
+        <div class="card stat-card fade-in stagger-5">
+          <div class="stat-icon">🏦</div>
+          <p class="card-title">Toplam Borç</p>
+          <p class="card-value negative">${formatCurrency(data.totalDebt)}</p>
+          <p class="card-subtitle">Aylık faiz: ${formatCurrency(data.totalMonthlyInterest)}</p>
+        </div>
+        ` : ''}
       </div>
     `;
   }
@@ -103,15 +140,19 @@ export class SavingsView {
             </tr>
           </thead>
           <tbody>
-            ${show.map(p => `
+            ${show.map((p, idx) => {
+              const prevDebt = idx > 0 ? show[idx - 1].debtRemaining : data.totalDebt;
+              const debtGrowing = p.debtRemaining > prevDebt;
+              const debtColor = p.debtRemaining <= 0 ? 'var(--accent-primary)' : debtGrowing ? 'var(--accent-danger)' : 'var(--accent-warning)';
+              return `
               <tr>
                 <td>${p.month}. Ay</td>
                 <td class="text-right ${p.savings >= 0 ? 'amount-income' : 'amount-expense'}">${formatCurrency(p.savings)}</td>
-                <td class="text-right" style="color:${p.debtRemaining > 0 ? 'var(--accent-warning)' : 'var(--accent-primary)'}">
-                  ${p.debtRemaining > 0 ? formatCurrency(p.debtRemaining) : '✅ Borçsuz'}
+                <td class="text-right" style="color:${debtColor}">
+                  ${p.debtRemaining <= 0 ? '✅ Borçsuz' : (debtGrowing ? '📈 ' : '📉 ') + formatCurrency(p.debtRemaining)}
                 </td>
               </tr>
-            `).join('')}
+            `}).join('')}
           </tbody>
         </table></div>
       </div>
@@ -156,12 +197,33 @@ export class SavingsView {
       });
     }
 
-    if (data.totalDebt > 0 && data.monthlySavings > 0) {
+    if (data.totalDebt > 0 && data.monthlySavings > 0 && data.debtPayoffStatus === 'payable') {
+      const y = Math.floor(data.monthsToPayOffDebt / 12);
+      const m = data.monthsToPayOffDebt % 12;
+      const timeStr = y > 0 ? `${y} yıl ${m} ay` : `${m} ay`;
       tips.push({
         icon: '💡',
         title: 'Borç Önceliği',
-        desc: `Tasarrufunuzun tamamını borç ödemesine yönlendirirseniz yaklaşık ${data.monthsToPayOffDebt} ayda borçsuz olabilirsiniz.`,
+        desc: `Tasarrufunuzun tamamını borç ödemesine yönlendirirseniz yaklaşık ${timeStr}da borçsuz olabilirsiniz.`,
         type: 'info'
+      });
+    }
+
+    if (data.totalDebt > 0 && data.debtPayoffStatus === 'insufficient') {
+      tips.push({
+        icon: '🔴',
+        title: 'Borç Faizi Tasarrufu Aşıyor',
+        desc: `Aylık tasarrufunuz (${formatCurrency(data.monthlySavings)}) borçlarınızın aylık faizini (${formatCurrency(data.totalMonthlyInterest)}) karşılamıyor. Borç büyümeye devam edecek. Geliri artırma veya harcama azaltma yollarını değerlendirin.`,
+        type: 'danger'
+      });
+    }
+
+    if (data.totalDebt > 0 && data.monthlySavings < 0) {
+      tips.push({
+        icon: '🚨',
+        title: 'Borç Sarmalı Riski',
+        desc: `Hem aylık açık veriyorsunuz (${formatCurrency(Math.abs(data.monthlySavings))}) hem de ${formatCurrency(data.totalDebt)} borcunuz var. Her ay borç faiz + açık kadar büyüyor. Acil önlem alınmalı.`,
+        type: 'danger'
       });
     }
 

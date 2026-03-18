@@ -629,16 +629,66 @@ router.get('/analysis/savings', (req, res) => {
   const monthlySavings = avgIncome - avgExpense;
   const totalDebt = debts.reduce((s, d) => s + d.currentBalance, 0);
 
-  // Projections
+  // Weighted average monthly interest across all debts
+  const totalMonthlyInterest = debts.reduce((s, d) => {
+    const rate = d.interestRate / 100 / 12;
+    return s + (d.currentBalance * rate);
+  }, 0);
+
+  // Projections — factor in debt interest growth
   const projections = [];
   let accumulated = 0;
+  let debtBalance = totalDebt;
   for (let i = 1; i <= 24; i++) {
     accumulated += monthlySavings;
+    // Debt grows by interest each month if not being paid down
+    const monthInterest = debtBalance * (totalDebt > 0 ? (totalMonthlyInterest / totalDebt) : 0);
+    if (monthlySavings > 0 && debtBalance > 0) {
+      // Positive savings go toward debt
+      debtBalance = debtBalance + monthInterest - monthlySavings;
+      if (debtBalance < 0) debtBalance = 0;
+    } else if (debtBalance > 0) {
+      // Negative savings — debt grows by interest + deficit
+      debtBalance = debtBalance + monthInterest + Math.abs(Math.min(0, monthlySavings));
+    }
     projections.push({
       month: i,
       savings: Math.round(accumulated),
-      debtRemaining: Math.max(0, Math.round(totalDebt - accumulated))
+      debtRemaining: Math.round(debtBalance)
     });
+  }
+
+  // Months to pay off debt (with interest factored in)
+  let monthsToPayOff = null;
+  let debtPayoffStatus = 'no_debt'; // no_debt | payable | insufficient | negative_savings
+
+  if (totalDebt > 0) {
+    if (monthlySavings <= 0) {
+      debtPayoffStatus = 'negative_savings';
+      monthsToPayOff = -1;
+    } else if (monthlySavings <= totalMonthlyInterest) {
+      // Savings can't even cover monthly interest
+      debtPayoffStatus = 'insufficient';
+      monthsToPayOff = -1;
+    } else {
+      // Simulate payoff with interest
+      let simBalance = totalDebt;
+      let simMonths = 0;
+      const avgMonthlyRate = totalDebt > 0 ? (totalMonthlyInterest / totalDebt) : 0;
+      while (simBalance > 0 && simMonths < 360) {
+        const interest = simBalance * avgMonthlyRate;
+        simBalance = simBalance + interest - monthlySavings;
+        simMonths++;
+        if (simBalance < 0) simBalance = 0;
+      }
+      if (simBalance > 0) {
+        debtPayoffStatus = 'insufficient';
+        monthsToPayOff = -1;
+      } else {
+        debtPayoffStatus = 'payable';
+        monthsToPayOff = simMonths;
+      }
+    }
   }
 
   // Spending patterns by category
@@ -653,7 +703,9 @@ router.get('/analysis/savings', (req, res) => {
     avgMonthlyExpense: Math.round(avgExpense),
     monthlySavings: Math.round(monthlySavings),
     totalDebt,
-    monthsToPayOffDebt: monthlySavings > 0 ? Math.ceil(totalDebt / monthlySavings) : null,
+    totalMonthlyInterest: Math.round(totalMonthlyInterest),
+    monthsToPayOffDebt: monthsToPayOff,
+    debtPayoffStatus,
     projections,
     categorySpending
   });
