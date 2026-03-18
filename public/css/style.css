@@ -2001,6 +2001,19 @@ body {
 .gap-sm { gap: var(--space-sm); }
 .gap-md { gap: var(--space-md); }
 
+/* ─── Breakdown Modal Styles ───────────────────────────────────── */
+.breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-sm) 0;
+  font-size: var(--font-sm);
+  border-bottom: 1px solid var(--surface-3);
+}
+.breakdown-row:last-child {
+  border-bottom: none;
+}
+
 /* ─── Back Navigation ──────────────────────────────────────────── */
 .back-btn {
   display: inline-flex;

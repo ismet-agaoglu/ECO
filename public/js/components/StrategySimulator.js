@@ -8,6 +8,7 @@ import { formatCurrency } from '../utils/formatters.js';
 export class StrategySimulator {
   constructor(container) {
     this.container = container;
+    this.strategiesData = null;
   }
 
   async render() {
@@ -39,6 +40,7 @@ export class StrategySimulator {
           </div>
         </div>
         <div id="strategyResults">Yükleniyor...</div>
+        <div id="modal-container"></div>
       `;
 
       this.loadStrategies(2000);
@@ -63,6 +65,7 @@ export class StrategySimulator {
 
     try {
       const data = await api.getStrategies(extra);
+      this.strategiesData = data;
       if (!data.strategies || data.strategies.length === 0) {
         el.innerHTML = '<p style="color:var(--text-muted)">Yeterli veri yok</p>';
         return;
@@ -117,6 +120,7 @@ export class StrategySimulator {
                 ${!cannotConverge && saving > 0 ? `
                   <p style="font-size:var(--font-xs);color:var(--accent-primary)">💰 Minimum ödemeye kıyasla ${formatCurrency(saving)} faiz tasarrufu</p>
                 ` : ''}
+                <button class="breakdown-btn" data-strategy="${s.name}" style="width:100%;margin-top:var(--space-md);padding:var(--space-sm) var(--space-md);background:var(--surface-3);border:1px solid var(--surface-2);border-radius:6px;color:var(--accent-primary);cursor:pointer;font-size:var(--font-xs);font-weight:600;transition:all 0.2s">📊 Nasıl Hesaplandı?</button>
               </div>
             `;
           }).join('')}
@@ -148,8 +152,103 @@ export class StrategySimulator {
           </div>
         ` : ''}
       `;
+
+      this.bindBreakdownButtons();
     } catch (err) {
       el.innerHTML = '<p style="color:var(--accent-danger)">Hesaplama hatası</p>';
     }
+  }
+
+  bindBreakdownButtons() {
+    document.querySelectorAll('.breakdown-btn').forEach(btn => {
+      btn.addEventListener('mouseover', () => {
+        btn.style.background = 'var(--surface-2)';
+        btn.style.borderColor = 'var(--accent-primary)';
+      });
+      btn.addEventListener('mouseout', () => {
+        btn.style.background = 'var(--surface-3)';
+        btn.style.borderColor = 'var(--surface-2)';
+      });
+      btn.addEventListener('click', () => {
+        const strategyName = btn.dataset.strategy;
+        this.showStrategyBreakdown(strategyName);
+      });
+    });
+  }
+
+  showStrategyBreakdown(strategyName) {
+    if (!this.strategiesData) return;
+
+    const strategy = this.strategiesData.strategies.find(s => s.name === strategyName);
+    if (!strategy || !strategy.breakdown) return;
+
+    const bd = strategy.breakdown;
+    const icons = { avalanche: '🏔️', snowball: '⛄', minimum: '🐢', aggressive: '🚀', balanced: '⚖️' };
+
+    const debtsList = bd.totalDebts.map(debt => `
+      <div style="margin-bottom:var(--space-md);padding:var(--space-md);background:var(--surface-3);border-radius:6px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span>${debt.name}</span>
+          <span style="font-weight:600">${formatCurrency(debt.balance)}</span>
+        </div>
+        <div style="font-size:var(--font-xs);color:var(--text-muted)">
+          %${debt.monthlyRate}/ay = ${formatCurrency(debt.monthlyInterest)}/ay
+        </div>
+      </div>
+    `).join('');
+
+    const stepsHtml = bd.calculationSteps.map(step => `
+      <div style="padding:var(--space-sm) 0;font-size:var(--font-sm);color:var(--text-muted)">
+        ${step}
+      </div>
+    `).join('');
+
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+      position:fixed;top:0;left:0;right:0;bottom:0;
+      background:rgba(0,0,0,0.5);
+      display:flex;align-items:center;justify-content:center;
+      z-index:1000;backdrop-filter:blur(4px)
+    `;
+    modal.innerHTML = `
+      <div style="background:var(--surface-1);border-radius:12px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+        <div style="padding:var(--space-lg);border-bottom:1px solid var(--surface-3);display:flex;justify-content:space-between;align-items:center">
+          <h3 style="margin:0;font-size:var(--font-lg)">${icons[strategyName] || '📊'} ${bd.strategy}</h3>
+          <button style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--text-muted);padding:0;width:32px;height:32px;display:flex;align-items:center;justify-content:center">×</button>
+        </div>
+        <div style="padding:var(--space-lg)">
+          <div style="margin-bottom:var(--space-lg)">
+            <div style="font-weight:600;margin-bottom:var(--space-md)">💳 Borçlarınız:</div>
+            ${debtsList}
+          </div>
+
+          <div style="margin-bottom:var(--space-lg)">
+            <div style="display:flex;justify-content:space-between;margin-bottom:var(--space-sm)">
+              <span>Aylık Ödeme:</span>
+              <span style="font-weight:600">${formatCurrency(bd.monthlyPayment)} ekstra</span>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+              <span>Aylık Fazlanız:</span>
+              <span style="font-weight:600">${formatCurrency(bd.avgMonthlySurplus)}</span>
+            </div>
+          </div>
+
+          <div style="margin-bottom:var(--space-lg);padding:var(--space-md);background:var(--surface-3);border-radius:6px">
+            <div style="font-weight:600;margin-bottom:var(--space-md)">📈 Hesaplama Adımları:</div>
+            ${stepsHtml}
+          </div>
+
+          <div style="padding:var(--space-md);background:var(--surface-2);border-left:3px solid var(--accent-primary);border-radius:6px">
+            <div style="font-weight:600;margin-bottom:var(--space-sm)">✅ Sonuç:</div>
+            <div style="font-size:var(--font-sm)">${bd.result}</div>
+          </div>
+        </div>
+      </div>
+    `;
+    modal.querySelector('button').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.remove();
+    });
+    document.getElementById('modal-container')?.appendChild(modal) || document.body.appendChild(modal);
   }
 }

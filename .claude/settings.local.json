@@ -21,7 +21,8 @@
       "Bash(node -c public/js/utils/constants.js)",
       "Bash(node --input-type=module -e \"import\\(''''./public/js/components/AnalyticsPage.js''''\\)\")",
       "Bash(node -c routes/api.js)",
-      "Bash(node -e \"require\\(''./routes/api.js''\\)\")"
+      "Bash(node -e \"require\\(''./routes/api.js''\\)\")",
+      "Bash(node -e \"require\\(''''./routes/api.js''''\\); console.log\\(''''API module loads successfully''''\\);\")"
     ]
   }
 }

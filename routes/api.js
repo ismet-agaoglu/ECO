@@ -1465,11 +1465,28 @@ router.get('/analytics/ratios', (req, res) => {
   const accounts = readData('accounts');
   const totalAccountBalance = accounts.reduce((s, a) => s + (a.balance || 0), 0);
 
+  const debtToIncomeValue = totalIncome > 0 ? Math.round((totalDebt / (totalIncome * 12)) * 10000) / 100 : 0;
+  const fixedObligationValue = totalIncome > 0 ? Math.round((fixedObligations / totalIncome) * 10000) / 100 : 0;
+  const savingsRateValue = totalIncome > 0 ? Math.round(((totalIncome - totalExpense) / totalIncome) * 10000) / 100 : 0;
+  const interestBurdenValue = totalIncome > 0 ? Math.round((totalInterest / totalIncome) * 10000) / 100 : 0;
+
+  const fixedExpensesList = recurring.filter(r => r.isActive && r.type === 'expense').map(r => ({
+    name: r.description,
+    amount: Math.round(r.amount)
+  }));
+
+  const debtBreakdown = debts.filter(d => getDebtBalance(d) > 0).map(d => ({
+    name: d.name,
+    balance: Math.round(getDebtBalance(d)),
+    monthlyRate: d.interestRate,
+    monthlyInterest: Math.round(getDebtBalance(d) * d.interestRate / 100)
+  }));
+
   res.json({
-    debtToIncome: totalIncome > 0 ? Math.round((totalDebt / (totalIncome * 12)) * 10000) / 100 : 0,
-    fixedObligationRatio: totalIncome > 0 ? Math.round((fixedObligations / totalIncome) * 10000) / 100 : 0,
-    savingsRate: totalIncome > 0 ? Math.round(((totalIncome - totalExpense) / totalIncome) * 10000) / 100 : 0,
-    interestBurden: totalIncome > 0 ? Math.round((totalInterest / totalIncome) * 10000) / 100 : 0,
+    debtToIncome: debtToIncomeValue,
+    fixedObligationRatio: fixedObligationValue,
+    savingsRate: savingsRateValue,
+    interestBurden: interestBurdenValue,
     discretionaryIncome: Math.round(totalIncome - fixedObligations - totalInterest),
     totalIncome: Math.round(totalIncome),
     totalExpense: Math.round(totalExpense),
@@ -1477,7 +1494,30 @@ router.get('/analytics/ratios', (req, res) => {
     monthlyInterest: Math.round(totalInterest),
     fixedObligations: Math.round(fixedObligations),
     netWorth: Math.round(totalAccountBalance - totalDebt),
-    liquidAssets: Math.round(totalAccountBalance)
+    liquidAssets: Math.round(totalAccountBalance),
+    debtToIncomeBreakdown: {
+      totalDebt: Math.round(totalDebt),
+      yearlyIncome: Math.round(totalIncome * 12),
+      formula: "Toplam Borç / Yıllık Gelir"
+    },
+    fixedObligationBreakdown: {
+      fixedExpensesAmount: Math.round(fixedObligations),
+      monthlyIncome: Math.round(totalIncome),
+      items: fixedExpensesList,
+      formula: "Sabit Giderler / Aylık Gelir"
+    },
+    savingsRateBreakdown: {
+      monthlyIncome: Math.round(totalIncome),
+      monthlyExpense: Math.round(totalExpense),
+      monthlySavings: Math.round(totalIncome - totalExpense),
+      formula: "(Aylık Gelir - Aylık Gider) / Aylık Gelir"
+    },
+    interestBurdenBreakdown: {
+      monthlyInterestTotal: Math.round(totalInterest),
+      monthlyIncome: Math.round(totalIncome),
+      debtBreakdown: debtBreakdown,
+      formula: "Toplam Aylık Faiz / Aylık Gelir"
+    }
   });
 });
 
@@ -1558,6 +1598,36 @@ router.get('/analysis/strategies', (req, res) => {
     s.monthlySaved = strategies[2].totalInterest > 0
       ? Math.round((strategies[2].totalInterest - s.totalInterest) / Math.max(1, s.totalMonths))
       : 0;
+
+    let extraPaymentAmount = 0;
+    if (s.name === 'avalanche' || s.name === 'snowball') {
+      extraPaymentAmount = extraPayment;
+    } else if (s.name === 'aggressive') {
+      extraPaymentAmount = Math.max(0, avgSurplus);
+    } else if (s.name === 'balanced') {
+      extraPaymentAmount = Math.max(0, avgSurplus * 0.6);
+    }
+
+    const debtBreakdownList = debts.filter(d => getDebtBalance(d) > 0).map(d => ({
+      name: d.name,
+      balance: Math.round(getDebtBalance(d)),
+      monthlyRate: d.interestRate,
+      monthlyInterest: Math.round(getDebtBalance(d) * d.interestRate / 100)
+    }));
+
+    s.breakdown = {
+      strategy: s.label,
+      avgMonthlySurplus: Math.round(avgSurplus),
+      monthlyPayment: Math.round(extraPaymentAmount),
+      totalDebts: debtBreakdownList,
+      calculationSteps: [
+        "1. Her ay borçlara minimum ödeme yapılır",
+        "2. Ödeme sonrası bakiye faiz ile artar",
+        "3. Aylık toplam faiz hesaplanır ve biriktirilir",
+        "4. Borçlar kapanıncaya kadar döngü devam eder"
+      ],
+      result: s.converged ? `${s.totalMonths} ayda ${Math.round(s.totalInterest)}₺ faiz ödenecek` : 'Bu stratejiyle borçlar kapanmıyor'
+    };
   });
 
   res.json({ strategies, avgMonthlySurplus: Math.round(avgSurplus) });

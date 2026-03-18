@@ -8,6 +8,7 @@ import { formatCurrency, MONTH_NAMES } from '../utils/formatters.js';
 export class AnalyticsPage {
   constructor(container) {
     this.container = container;
+    this.ratiosData = null;
   }
 
   async render() {
@@ -20,6 +21,7 @@ export class AnalyticsPage {
         api.getCategoryTrends(6)
       ]);
 
+      this.ratiosData = ratios;
       this.categories = await api.getCategories();
       this.catTrends = catTrends;
 
@@ -30,8 +32,10 @@ export class AnalyticsPage {
         ${this.renderRecommendations(recommendations)}
         ${this.renderCategoryTrends(catTrends)}
         ${this.renderWhatIf()}
+        <div id="modal-container"></div>
       `;
       this.bindWhatIf();
+      this.bindGauges();
     } catch (err) {
       this.container.innerHTML = '<div class="empty-state"><p>Analiz yüklenemedi</p></div>';
       console.error(err);
@@ -40,10 +44,10 @@ export class AnalyticsPage {
 
   renderRatios(r) {
     const gauges = [
-      { label: 'Toplam Borc / Yillik Gelir', desc: 'Toplam borcunuzun yillik gelirinize orani. %40 alti saglikli', value: r.debtToIncome, safe: 40, warn: 60, unit: '%', icon: '🏦' },
-      { label: 'Sabit Gider Orani', desc: 'Aylik sabit giderlerinizin (kira, fatura, abonelik) gelirinize orani. %50 alti ideal', value: r.fixedObligationRatio, safe: 50, warn: 70, unit: '%', icon: '📌' },
-      { label: 'Tasarruf Orani', desc: 'Gelirinizden harcamalar ciktiktan sonra kalan oran. %20 ustu hedefleyin', value: r.savingsRate, safe: 20, warn: 10, unit: '%', icon: '💰', invert: true },
-      { label: 'Faiz / Gelir Orani', desc: 'Borc faizlerinin aylik gelirinize orani. %5 alti guvenli', value: r.interestBurden, safe: 5, warn: 10, unit: '%', icon: '📉' }
+      { id: 'debt-to-income', label: 'Toplam Borc / Yillik Gelir', desc: 'Toplam borcunuzun yillik gelirinize orani. %40 alti saglikli', value: r.debtToIncome, safe: 40, warn: 60, unit: '%', icon: '🏦' },
+      { id: 'fixed-obligation', label: 'Sabit Gider Orani', desc: 'Aylik sabit giderlerinizin (kira, fatura, abonelik) gelirinize orani. %50 alti ideal', value: r.fixedObligationRatio, safe: 50, warn: 70, unit: '%', icon: '📌' },
+      { id: 'savings-rate', label: 'Tasarruf Orani', desc: 'Gelirinizden harcamalar ciktiktan sonra kalan oran. %20 ustu hedefleyin', value: r.savingsRate, safe: 20, warn: 10, unit: '%', icon: '💰', invert: true },
+      { id: 'interest-burden', label: 'Faiz / Gelir Orani', desc: 'Borc faizlerinin aylik gelirinize orani. %5 alti guvenli', value: r.interestBurden, safe: 5, warn: 10, unit: '%', icon: '📉' }
     ];
 
     return `
@@ -58,7 +62,7 @@ export class AnalyticsPage {
             else if (g.value > g.safe) color = 'var(--accent-warning)';
           }
           return `
-            <div class="card stat-card fade-in stagger-${i + 1}">
+            <div class="card stat-card fade-in stagger-${i + 1}" data-gauge-id="${g.id}" style="cursor:pointer;transition:transform 0.2s,box-shadow 0.2s">
               <div class="stat-icon">${g.icon}</div>
               <p class="card-title">${g.label}</p>
               <p class="card-value" style="color:${color}">%${g.value.toFixed(1)}</p>
@@ -66,6 +70,7 @@ export class AnalyticsPage {
                 <div class="progress-bar" style="width:${Math.min(100, g.value)}%;background:${color}"></div>
               </div>
               ${g.desc ? `<p style="font-size:var(--font-xs);color:var(--text-muted);margin-top:var(--space-sm);line-height:1.4">${g.desc}</p>` : ''}
+              <p style="font-size:var(--font-xs);color:var(--accent-primary);margin-top:var(--space-sm);font-weight:600">📊 Nasıl Hesaplandı?</p>
             </div>
           `;
         }).join('')}
@@ -86,6 +91,168 @@ export class AnalyticsPage {
         </div>
       </div>
     `;
+  }
+
+  bindGauges() {
+    document.querySelectorAll('[data-gauge-id]').forEach(el => {
+      el.addEventListener('mouseover', () => {
+        el.style.transform = 'scale(1.02)';
+        el.style.boxShadow = '0 8px 24px rgba(0,255,170,0.1)';
+      });
+      el.addEventListener('mouseout', () => {
+        el.style.transform = 'scale(1)';
+        el.style.boxShadow = '';
+      });
+      el.addEventListener('click', () => {
+        const gaugeId = el.dataset.gaugeId;
+        this.showBreakdownModal(gaugeId);
+      });
+    });
+  }
+
+  showBreakdownModal(gaugeId) {
+    if (!this.ratiosData) return;
+
+    const r = this.ratiosData;
+    let title = '';
+    let content = '';
+
+    if (gaugeId === 'debt-to-income') {
+      title = 'Toplam Borç / Yıllık Gelir Oranı';
+      const breakdown = r.debtToIncomeBreakdown;
+      content = `
+        <div style="padding:var(--space-lg)">
+          <div class="breakdown-row">
+            <span>Toplam Borç:</span>
+            <span style="font-weight:600">${formatCurrency(breakdown.totalDebt)}</span>
+          </div>
+          <div class="breakdown-row">
+            <span>Yıllık Gelir:</span>
+            <span style="font-weight:600">${formatCurrency(breakdown.yearlyIncome)} (${formatCurrency(r.totalIncome)}/ay × 12)</span>
+          </div>
+          <div class="breakdown-row mt-md" style="border-top:1px solid var(--surface-3);padding-top:var(--space-md)">
+            <span>Hesaplama:</span>
+            <span>${formatCurrency(breakdown.totalDebt)} / ${formatCurrency(breakdown.yearlyIncome)} = %${r.debtToIncome.toFixed(1)}</span>
+          </div>
+          <div style="margin-top:var(--space-lg);font-size:var(--font-xs);color:var(--text-muted)">
+            <strong>Formül:</strong> ${breakdown.formula}
+          </div>
+        </div>
+      `;
+    } else if (gaugeId === 'fixed-obligation') {
+      title = 'Sabit Gider Oranı';
+      const breakdown = r.fixedObligationBreakdown;
+      const itemsList = breakdown.items.map(item => `
+        <div class="breakdown-row">
+          <span>  ${item.name}:</span>
+          <span>${formatCurrency(item.amount)}</span>
+        </div>
+      `).join('');
+      content = `
+        <div style="padding:var(--space-lg)">
+          <div style="font-weight:600;margin-bottom:var(--space-md)">Sabit Giderler:</div>
+          ${itemsList}
+          <div class="breakdown-row" style="border-top:1px solid var(--surface-3);margin-top:var(--space-md);padding-top:var(--space-md)">
+            <span>Toplam:</span>
+            <span style="font-weight:600">${formatCurrency(breakdown.fixedExpensesAmount)}</span>
+          </div>
+          <div class="breakdown-row mt-md">
+            <span>Aylık Gelir:</span>
+            <span style="font-weight:600">${formatCurrency(breakdown.monthlyIncome)}</span>
+          </div>
+          <div class="breakdown-row mt-md" style="border-top:1px solid var(--surface-3);padding-top:var(--space-md)">
+            <span>Hesaplama:</span>
+            <span>${formatCurrency(breakdown.fixedExpensesAmount)} / ${formatCurrency(breakdown.monthlyIncome)} = %${r.fixedObligationRatio.toFixed(1)}</span>
+          </div>
+          <div style="margin-top:var(--space-lg);font-size:var(--font-xs);color:var(--text-muted)">
+            <strong>Formül:</strong> ${breakdown.formula}
+          </div>
+        </div>
+      `;
+    } else if (gaugeId === 'savings-rate') {
+      title = 'Tasarruf Oranı';
+      const breakdown = r.savingsRateBreakdown;
+      content = `
+        <div style="padding:var(--space-lg)">
+          <div class="breakdown-row">
+            <span>Aylık Gelir:</span>
+            <span style="font-weight:600">${formatCurrency(breakdown.monthlyIncome)}</span>
+          </div>
+          <div class="breakdown-row">
+            <span>Aylık Gider:</span>
+            <span style="font-weight:600">${formatCurrency(breakdown.monthlyExpense)}</span>
+          </div>
+          <div class="breakdown-row" style="border-top:1px solid var(--surface-3);margin-top:var(--space-md);padding-top:var(--space-md)">
+            <span>Aylık Tasarruf:</span>
+            <span style="font-weight:600">${formatCurrency(breakdown.monthlySavings)}</span>
+          </div>
+          <div class="breakdown-row mt-md">
+            <span>Hesaplama:</span>
+            <span>${formatCurrency(breakdown.monthlySavings)} / ${formatCurrency(breakdown.monthlyIncome)} = %${r.savingsRate.toFixed(1)}</span>
+          </div>
+          <div style="margin-top:var(--space-lg);font-size:var(--font-xs);color:var(--text-muted)">
+            <strong>Formül:</strong> ${breakdown.formula}
+          </div>
+        </div>
+      `;
+    } else if (gaugeId === 'interest-burden') {
+      title = 'Faiz / Gelir Oranı';
+      const breakdown = r.interestBurdenBreakdown;
+      const debtsList = breakdown.debtBreakdown.map(debt => `
+        <div style="margin-bottom:var(--space-md);padding:var(--space-md);background:var(--surface-3);border-radius:6px">
+          <div class="breakdown-row">
+            <span>${debt.name}:</span>
+            <span>${formatCurrency(debt.balance)}</span>
+          </div>
+          <div class="breakdown-row" style="font-size:var(--font-xs);color:var(--text-muted);margin-top:4px">
+            <span>%${debt.monthlyRate}/ay = ${formatCurrency(debt.monthlyInterest)}/ay</span>
+          </div>
+        </div>
+      `).join('');
+      content = `
+        <div style="padding:var(--space-lg)">
+          <div style="font-weight:600;margin-bottom:var(--space-md)">Borç Detayları:</div>
+          ${debtsList}
+          <div class="breakdown-row">
+            <span>Toplam Aylık Faiz:</span>
+            <span style="font-weight:600">${formatCurrency(breakdown.monthlyInterestTotal)}</span>
+          </div>
+          <div class="breakdown-row mt-md">
+            <span>Aylık Gelir:</span>
+            <span style="font-weight:600">${formatCurrency(breakdown.monthlyIncome)}</span>
+          </div>
+          <div class="breakdown-row mt-md" style="border-top:1px solid var(--surface-3);padding-top:var(--space-md)">
+            <span>Hesaplama:</span>
+            <span>${formatCurrency(breakdown.monthlyInterestTotal)} / ${formatCurrency(breakdown.monthlyIncome)} = %${r.interestBurden.toFixed(1)}</span>
+          </div>
+          <div style="margin-top:var(--space-lg);font-size:var(--font-xs);color:var(--text-muted)">
+            <strong>Formül:</strong> ${breakdown.formula}
+          </div>
+        </div>
+      `;
+    }
+
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+      position:fixed;top:0;left:0;right:0;bottom:0;
+      background:rgba(0,0,0,0.5);
+      display:flex;align-items:center;justify-content:center;
+      z-index:1000;backdrop-filter:blur(4px)
+    `;
+    modal.innerHTML = `
+      <div style="background:var(--surface-1);border-radius:12px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+        <div style="padding:var(--space-lg);border-bottom:1px solid var(--surface-3);display:flex;justify-content:space-between;align-items:center">
+          <h3 style="margin:0;font-size:var(--font-lg)">${title}</h3>
+          <button style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--text-muted);padding:0;width:32px;height:32px;display:flex;align-items:center;justify-content:center">×</button>
+        </div>
+        ${content}
+      </div>
+    `;
+    modal.querySelector('button').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.remove();
+    });
+    document.getElementById('modal-container')?.appendChild(modal) || document.body.appendChild(modal);
   }
 
   renderTrends(trends) {
