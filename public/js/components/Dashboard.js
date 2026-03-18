@@ -244,11 +244,18 @@ export class Dashboard {
     `;
   }
 
+  _getBalance(d) {
+    if (d.type === 'credit_card' || d.type === 'overdraft') {
+      return d.usedAmount !== undefined ? d.usedAmount : (d.currentBalance || 0);
+    }
+    return d.currentBalance !== undefined ? d.currentBalance : (d.usedAmount || 0);
+  }
+
   renderDebtSummary(debts) {
     if (debts.length === 0) return '';
 
-    const totalDebt = debts.reduce((s, d) => s + d.currentBalance, 0);
-    const totalInterest = debts.reduce((s, d) => s + (d.currentBalance * d.interestRate / 100), 0);
+    const totalDebt = debts.reduce((s, d) => s + this._getBalance(d), 0);
+    const totalInterest = debts.reduce((s, d) => s + (this._getBalance(d) * d.interestRate / 100), 0);
 
     return `
       <div class="card mt-lg fade-in">
@@ -272,7 +279,9 @@ export class Dashboard {
 
   renderUpcoming(upcoming) {
     if (!upcoming || upcoming.length === 0) return '';
-    const total = upcoming.reduce((s, u) => s + u.amount, 0);
+    // isInfoOnly olan taksitler toplama dahil değil (KK borcunun parçası)
+    const billable = upcoming.filter(u => !u.isInfoOnly);
+    const total = billable.reduce((s, u) => s + u.amount, 0);
 
     // Group by type
     const debtPayments = upcoming.filter(u => u.type === 'debt');
@@ -299,14 +308,14 @@ export class Dashboard {
             `).join('')}
           ` : ''}
           ${installmentPayments.length > 0 ? `
-            <div style="padding:var(--space-xs) var(--space-md);font-size:var(--font-xs);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-top:var(--space-xs)">Taksitler</div>
+            <div style="padding:var(--space-xs) var(--space-md);font-size:var(--font-xs);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-top:var(--space-xs)">Taksitler (Kredi Kartı Borcuna Dahil)</div>
             ${installmentPayments.map(u => `
-              <div class="recent-item">
+              <div class="recent-item" style="${u.isInfoOnly ? 'opacity:0.7' : ''}">
                 <div class="recent-info">
                   <div class="recent-desc">💳 ${u.name}</div>
-                  <div class="recent-date">${u.remaining || ''}</div>
+                  <div class="recent-date">${u.remaining || ''}${u.creditCardName ? ` · ${u.creditCardName}` : ''}</div>
                 </div>
-                <div class="recent-amount amount-expense">-${formatCurrency(u.amount)}</div>
+                <div class="recent-amount" style="color:var(--text-muted);font-size:var(--font-sm)">${formatCurrency(u.amount)}/ay</div>
               </div>
             `).join('')}
           ` : ''}

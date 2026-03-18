@@ -20,6 +20,13 @@ class AnalysisEngine {
     this.assets = assets;
   }
 
+  static _bal(d) {
+    if (d.type === 'credit_card' || d.type === 'overdraft') {
+      return d.usedAmount !== undefined ? d.usedAmount : (d.currentBalance || 0);
+    }
+    return d.currentBalance !== undefined ? d.currentBalance : (d.usedAmount || 0);
+  }
+
   // ─── B1: Monthly Snapshot ─────────────────────────────────────
   monthlySnapshot(year, month) {
     const monthTxs = this.txs.filter(t => {
@@ -29,7 +36,7 @@ class AnalysisEngine {
 
     const income = monthTxs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
     const expense = monthTxs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-    const totalDebt = this.debts.reduce((s, d) => s + d.currentBalance, 0);
+    const totalDebt = this.debts.reduce((s, d) => s + AnalysisEngine._bal(d), 0);
 
     // Category breakdown
     const categories = {};
@@ -59,7 +66,7 @@ class AnalysisEngine {
   // ─── B2: Net Worth ────────────────────────────────────────────
   netWorth() {
     const totalAssets = Object.values(this.assets).reduce((s, v) => s + (v || 0), 0) + this.cash;
-    const totalDebt = this.debts.reduce((s, d) => s + d.currentBalance, 0);
+    const totalDebt = this.debts.reduce((s, d) => s + AnalysisEngine._bal(d), 0);
     const net = totalAssets - totalDebt;
 
     return {
@@ -105,7 +112,7 @@ class AnalysisEngine {
 
     const allocation = debts.map(d => {
       const minPay = d.minPayment;
-      return { name: d.name, balance: d.currentBalance, rate: d.interestRate, minPayment: minPay, allocated: minPay };
+      return { name: d.name, balance: AnalysisEngine._bal(d), rate: d.interestRate, minPayment: minPay, allocated: minPay };
     });
 
     // Distribute remaining to highest interest first

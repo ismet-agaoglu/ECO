@@ -19,6 +19,13 @@ class BehavioralEngine {
     this.monthlyIncome = monthlyIncome;
   }
 
+  static _bal(d) {
+    if (d.type === 'credit_card' || d.type === 'overdraft') {
+      return d.usedAmount !== undefined ? d.usedAmount : (d.currentBalance || 0);
+    }
+    return d.currentBalance !== undefined ? d.currentBalance : (d.usedAmount || 0);
+  }
+
   // ─── B10: Harcama Pattern Analizi ───────────────────────────
   spendingPatterns() {
     const expenses = this.txs.filter(t => t.type === 'expense');
@@ -185,7 +192,7 @@ class BehavioralEngine {
 
   // ─── B13: Financial Stress Index ────────────────────────────
   financialStress() {
-    const totalDebt = this.debts.reduce((s, d) => s + d.currentBalance, 0);
+    const totalDebt = this.debts.reduce((s, d) => s + BehavioralEngine._bal(d), 0);
     const totalMinPayment = this.debts.reduce((s, d) => s + d.minPayment, 0);
     const income = this.monthlyIncome;
 
@@ -200,7 +207,7 @@ class BehavioralEngine {
     const expenseRatio = income > 0 ? avgExpense / income : 1;
     const expenseScore = Math.min(10, expenseRatio * 10); // %100 = 10
 
-    const growingDebts = this.debts.filter(d => d.minPayment < d.currentBalance * (d.interestRate / 100)).length;
+    const growingDebts = this.debts.filter(d => d.minPayment < BehavioralEngine._bal(d) * (d.interestRate / 100)).length;
     const growthScore = Math.min(10, growingDebts * 3.3);
 
     // Recurring yük
@@ -300,7 +307,7 @@ class BehavioralEngine {
   // ─── B15: Kapsamlı Risk Skoru ───────────────────────────────
   riskScore() {
     const income = this.monthlyIncome;
-    const totalDebt = this.debts.reduce((s, d) => s + d.currentBalance, 0);
+    const totalDebt = this.debts.reduce((s, d) => s + BehavioralEngine._bal(d), 0);
     const totalMinPayment = this.debts.reduce((s, d) => s + d.minPayment, 0);
     const avgExpense = this._avgMonthly('expense');
     const avgIncome = this._avgMonthly('income');
@@ -320,7 +327,7 @@ class BehavioralEngine {
     factors.push({ name: 'Toplam Borç Yükü', value: `${debtRatio.toFixed(1)}x yıllık gelir`, score: Math.min(100, Math.round(debtRatio * 50)), risk: debtRatio > 1.5 ? 'yüksek' : debtRatio > 0.5 ? 'orta' : 'düşük' });
 
     // 4. Büyüyen borç sayısı
-    const growingDebts = this.debts.filter(d => d.minPayment < d.currentBalance * (d.interestRate / 100)).length;
+    const growingDebts = this.debts.filter(d => d.minPayment < BehavioralEngine._bal(d) * (d.interestRate / 100)).length;
     const growScore = Math.min(100, growingDebts * 33);
     factors.push({ name: 'Büyüyen Borçlar', value: `${growingDebts}/${this.debts.length}`, score: growScore, risk: growingDebts > 1 ? 'yüksek' : growingDebts > 0 ? 'orta' : 'düşük' });
 
@@ -417,7 +424,7 @@ class BehavioralEngine {
     const avgExpense = expenses.reduce((s, v) => s + v, 0) / expenses.length;
     const stdExpense = Math.sqrt(expenses.reduce((s, v) => s + Math.pow(v - avgExpense, 2), 0) / expenses.length);
 
-    const totalDebt = this.debts.reduce((s, d) => s + d.currentBalance, 0);
+    const totalDebt = this.debts.reduce((s, d) => s + BehavioralEngine._bal(d), 0);
     const debtPayment = this.debts.reduce((s, d) => s + d.minPayment, 0);
 
     // Simülasyonlar

@@ -178,12 +178,17 @@ class OvertimeService {
       return { netGain, allocations: [], message: 'Net kazanç yok veya borç bilgisi eksik' };
     }
 
+    const _bal = (d) => (d.type === 'credit_card' || d.type === 'overdraft')
+      ? (d.usedAmount !== undefined ? d.usedAmount : (d.currentBalance || 0))
+      : (d.currentBalance !== undefined ? d.currentBalance : (d.usedAmount || 0));
+
     const allocations = debts.map(d => {
-      const interestSavedPerMonth = Math.min(netGain, d.currentBalance) * (d.interestRate / 100);
+      const bal = _bal(d);
+      const interestSavedPerMonth = Math.min(netGain, bal) * (d.interestRate / 100);
       return {
         debtName: d.name,
         debtType: d.type,
-        balance: d.currentBalance,
+        balance: bal,
         interestRate: d.interestRate,
         interestSavedMonthly: Math.round(interestSavedPerMonth),
         interestSavedYearly: Math.round(interestSavedPerMonth * 12)

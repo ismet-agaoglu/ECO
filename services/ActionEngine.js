@@ -12,6 +12,13 @@ class ActionEngine {
     this.cash = currentCash;
   }
 
+  static _bal(d) {
+    if (d.type === 'credit_card' || d.type === 'overdraft') {
+      return d.usedAmount !== undefined ? d.usedAmount : (d.currentBalance || 0);
+    }
+    return d.currentBalance !== undefined ? d.currentBalance : (d.usedAmount || 0);
+  }
+
   /**
    * Tüm aksiyonları üret (öncelik sıralı)
    */
@@ -47,7 +54,7 @@ class ActionEngine {
 
     // Hedef ulaşılabilir mi?
     const totalPaid = (totalMinPayment + monthlyExtra) * months;
-    const totalDebt = this.debts.reduce((s, d) => s + d.currentBalance, 0);
+    const totalDebt = this.debts.reduce((s, d) => s + ActionEngine._bal(d), 0);
     const reductionPercent = totalDebt > 0 ? Math.round(totalPaid / totalDebt * 100) : 0;
     const targetReachable = reductionPercent >= targetDebtReduction;
 
@@ -70,7 +77,7 @@ class ActionEngine {
    * "X ayda borcu Y% azaltmak için ne gerekir?"
    */
   reverseGoal(targetPercent, months) {
-    const totalDebt = this.debts.reduce((s, d) => s + d.currentBalance, 0);
+    const totalDebt = this.debts.reduce((s, d) => s + ActionEngine._bal(d), 0);
     const targetAmount = totalDebt * (targetPercent / 100);
     const totalMinPayment = this.debts.reduce((s, d) => s + d.minPayment, 0);
 
@@ -113,13 +120,13 @@ class ActionEngine {
         title: `${d.name} borcuna ekstra ödeme yap`,
         description: `%${d.interestRate}/ay faiz oranıyla en pahalı borcunuz. Ekstra ödeme burada en çok faiz tasarrufu sağlar.`,
         reason: `Çığ (avalanche) yöntemi: en yüksek faizli borca öncelik verildiğinde toplam faiz yükü minimize edilir.`,
-        potentialSaving: Math.round(d.currentBalance * d.interestRate / 100 * 0.3 * 12)
+        potentialSaving: Math.round(ActionEngine._bal(d) * d.interestRate / 100 * 0.3 * 12)
       });
     }
 
     // Büyüyen borçlar
     for (const d of this.debts) {
-      const monthlyInterest = d.currentBalance * (d.interestRate / 100);
+      const monthlyInterest = ActionEngine._bal(d) * (d.interestRate / 100);
       if (d.minPayment < monthlyInterest) {
         actions.push({
           type: 'debt_growing',
@@ -134,13 +141,14 @@ class ActionEngine {
 
     // Küçük kapanabilir borçlar
     for (const d of this.debts) {
-      if (d.currentBalance < this.income * 0.3 && d.currentBalance > 0) {
+      const dBal = ActionEngine._bal(d);
+      if (dBal < this.income * 0.3 && dBal > 0) {
         actions.push({
           type: 'debt_quick_win',
           priority: 'orta',
           impact: 5,
           title: `${d.name} hızlı kapatılabilir`,
-          description: `Bakiye: ${Math.round(d.currentBalance).toLocaleString('tr-TR')} ₺ — aylık gelirin %${Math.round(d.currentBalance / this.income * 100)}'i.`,
+          description: `Bakiye: ${Math.round(dBal).toLocaleString('tr-TR')} ₺ — aylık gelirin %${Math.round(dBal / this.income * 100)}'i.`,
           reason: 'Küçük borçları kapatmak psikolojik motivasyon sağlar (snowball etkisi) ve aylık sabit yükü azaltır.'
         });
       }
@@ -223,12 +231,12 @@ class ActionEngine {
 
   _structuralActions() {
     const actions = [];
-    const totalDebt = this.debts.reduce((s, d) => s + d.currentBalance, 0);
+    const totalDebt = this.debts.reduce((s, d) => s + ActionEngine._bal(d), 0);
 
     // Konsolidasyon önerisi
     const highRateDebts = this.debts.filter(d => d.interestRate > 3);
     if (highRateDebts.length > 1) {
-      const avgRate = highRateDebts.reduce((s, d) => s + d.interestRate * d.currentBalance, 0) / highRateDebts.reduce((s, d) => s + d.currentBalance, 0);
+      const avgRate = highRateDebts.reduce((s, d) => s + d.interestRate * ActionEngine._bal(d), 0) / highRateDebts.reduce((s, d) => s + ActionEngine._bal(d), 0);
       actions.push({
         type: 'consolidation',
         priority: 'orta',

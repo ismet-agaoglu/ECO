@@ -13,6 +13,13 @@ class NotificationService {
     this.today = new Date();
   }
 
+  static _bal(d) {
+    if (d.type === 'credit_card' || d.type === 'overdraft') {
+      return d.usedAmount !== undefined ? d.usedAmount : (d.currentBalance || 0);
+    }
+    return d.currentBalance !== undefined ? d.currentBalance : (d.usedAmount || 0);
+  }
+
   /**
    * Tüm bildirimleri üret
    */
@@ -167,7 +174,8 @@ class NotificationService {
 
     for (const debt of this.debts) {
       // Büyüyen borç uyarısı
-      const monthlyInterest = debt.currentBalance * (debt.interestRate / 100);
+      const bal = NotificationService._bal(debt);
+      const monthlyInterest = bal * (debt.interestRate / 100);
       if (debt.minPayment < monthlyInterest) {
         alerts.push({
           type: 'debt_growing',
@@ -181,13 +189,13 @@ class NotificationService {
       }
 
       // Limit yaklaşımı (kredi kartı)
-      if (debt.limit && debt.currentBalance > debt.limit * 0.9) {
+      if (debt.limit && bal > debt.limit * 0.9) {
         alerts.push({
           type: 'limit_warning',
           severity: 'medium',
           priority: 6,
-          title: `${debt.name} limitinin %${Math.round(debt.currentBalance / debt.limit * 100)}'ine ulaştı`,
-          message: `Bakiye: ${this._fmt(debt.currentBalance)} / Limit: ${this._fmt(debt.limit)}`,
+          title: `${debt.name} limitinin %${Math.round(bal / debt.limit * 100)}'ine ulaştı`,
+          message: `Bakiye: ${this._fmt(bal)} / Limit: ${this._fmt(debt.limit)}`,
           debtId: debt.id,
           icon: '💳'
         });
@@ -195,7 +203,7 @@ class NotificationService {
     }
 
     // Toplam borç/gelir oranı
-    const totalDebt = this.debts.reduce((s, d) => s + d.currentBalance, 0);
+    const totalDebt = this.debts.reduce((s, d) => s + NotificationService._bal(d), 0);
     const totalMin = this.debts.reduce((s, d) => s + d.minPayment, 0);
     if (this.income > 0 && totalMin > this.income * 0.6) {
       alerts.push({

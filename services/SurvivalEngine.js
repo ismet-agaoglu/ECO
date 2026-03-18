@@ -7,7 +7,7 @@ class SurvivalEngine {
   /**
    * @param {Object} opts
    * @param {number} opts.monthlyIncome
-   * @param {Array}  opts.debts          — [{currentBalance, interestRate, minPayment, type, name}]
+   * @param {Array}  opts.debts          — [{usedAmount|currentBalance, interestRate, minPayment, type, name}]
    * @param {Array}  opts.fixedExpenses  — [{amount, description}]
    * @param {number} opts.variableExpenseAvg — average monthly variable spending
    * @param {Array}  opts.installments   — [{monthlyAmount, remaining}]
@@ -18,6 +18,14 @@ class SurvivalEngine {
     this.fixedExpenses = fixedExpenses;
     this.variableAvg = variableExpenseAvg;
     this.installments = installments;
+  }
+
+  /** Borcun bakiyesini dondurur — tur bazli alan secimi */
+  static _bal(d) {
+    if (d.type === 'credit_card' || d.type === 'overdraft') {
+      return d.usedAmount !== undefined ? d.usedAmount : (d.currentBalance || 0);
+    }
+    return d.currentBalance !== undefined ? d.currentBalance : (d.usedAmount || 0);
   }
 
   // ─── S1: Hayatta Kalma Motoru ─────────────────────────────────
@@ -61,7 +69,8 @@ class SurvivalEngine {
   // ─── S2: Borç Büyüyor Mu? Testi ──────────────────────────────
   debtGrowthTest() {
     return this.debts.map(d => {
-      const monthlyInterest = d.currentBalance * (d.interestRate / 100);
+      const bal = SurvivalEngine._bal(d);
+      const monthlyInterest = bal * (d.interestRate / 100);
       const netChange = d.minPayment - monthlyInterest;
       let status, label;
       if (netChange > 0) { status = 'shrinking'; label = 'Azalıyor'; }
@@ -71,11 +80,11 @@ class SurvivalEngine {
       return {
         name: d.name,
         type: d.type,
-        balance: d.currentBalance,
+        balance: bal,
         monthlyInterest: Math.round(monthlyInterest),
         minPayment: d.minPayment,
         netChange: Math.round(netChange),
-        monthsToPayoff: netChange > 0 ? Math.ceil(d.currentBalance / netChange) : Infinity,
+        monthsToPayoff: netChange > 0 ? Math.ceil(bal / netChange) : Infinity,
         status,
         label
       };
@@ -256,13 +265,13 @@ class SurvivalEngine {
       ? this.debts.filter(d => d.interestRate > onlyAboveRate)
       : [...this.debts];
 
-    const totalDebt = debtsToConsolidate.reduce((s, d) => s + d.currentBalance, 0);
+    const totalDebt = debtsToConsolidate.reduce((s, d) => s + SurvivalEngine._bal(d), 0);
     const currentMonthlyPayment = debtsToConsolidate.reduce((s, d) => s + d.minPayment, 0);
     const currentTotalInterest = this._estimateTotalInterest(debtsToConsolidate);
 
     // Weighted average current rate
     const weightedRate = debtsToConsolidate.reduce((s, d) =>
-      s + (d.currentBalance / totalDebt) * d.interestRate, 0);
+      s + (SurvivalEngine._bal(d) / totalDebt) * d.interestRate, 0);
 
     const scenarios = terms.map(months => {
       const monthlyRate = newInterestRate / 100;
@@ -313,7 +322,7 @@ class SurvivalEngine {
       warnings.push({ type: 'REJECT', message: 'Yeni kredi sonrası açık devam ediyor — kredi almak sorunu çözmüyor' });
     }
 
-    const totalDebt = this.debts.reduce((s, d) => s + d.currentBalance, 0);
+    const totalDebt = this.debts.reduce((s, d) => s + SurvivalEngine._bal(d), 0);
     if (totalDebt / this.income > 3) {
       warnings.push({ type: 'WARNING', message: 'Toplam borç/gelir oranı çok yüksek. Yeni kredi almak riski artırır.' });
     }
@@ -326,12 +335,12 @@ class SurvivalEngine {
 
   // ─── Helper methods ───────────────────────────────────────────
   _totalMonthlyInterest() {
-    return this.debts.reduce((s, d) => s + (d.currentBalance * (d.interestRate / 100)), 0);
+    return this.debts.reduce((s, d) => s + (SurvivalEngine._bal(d) * (d.interestRate / 100)), 0);
   }
 
   _simulateMinOnly() {
     let months = 0;
-    let balances = this.debts.map(d => ({ ...d, bal: d.currentBalance }));
+    let balances = this.debts.map(d => ({ ...d, bal: SurvivalEngine._bal(d) }));
     while (balances.some(b => b.bal > 0) && months < 360) {
       months++;
       balances = balances.map(b => {
@@ -348,7 +357,7 @@ class SurvivalEngine {
   _estimateTotalInterest(debts) {
     let total = 0;
     for (const d of debts) {
-      let bal = d.currentBalance;
+      let bal = SurvivalEngine._bal(d);
       let months = 0;
       while (bal > 0 && months < 360) {
         const interest = bal * (d.interestRate / 100);

@@ -12,6 +12,13 @@ class SnapshotService {
     this.snapshots = snapshots;
   }
 
+  static _bal(d) {
+    if (d.type === 'credit_card' || d.type === 'overdraft') {
+      return d.usedAmount !== undefined ? d.usedAmount : (d.currentBalance || 0);
+    }
+    return d.currentBalance !== undefined ? d.currentBalance : (d.usedAmount || 0);
+  }
+
   /**
    * Belirli ay için snapshot oluştur
    */
@@ -23,7 +30,7 @@ class SnapshotService {
 
     const income = monthTxs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
     const expense = monthTxs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-    const totalDebt = this.debts.reduce((s, d) => s + d.currentBalance, 0);
+    const totalDebt = this.debts.reduce((s, d) => s + SnapshotService._bal(d), 0);
     const totalMinPayment = this.debts.reduce((s, d) => s + d.minPayment, 0);
 
     // Kategori dağılımı
@@ -61,7 +68,7 @@ class SnapshotService {
       debtSnapshot: this.debts.map(d => ({
         id: d.id,
         name: d.name,
-        balance: d.currentBalance,
+        balance: SnapshotService._bal(d),
         rate: d.interestRate
       })),
       riskScore,

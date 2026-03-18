@@ -24,6 +24,13 @@ class CrisisEngine {
     this.debts = debts;
   }
 
+  static _bal(d) {
+    if (d.type === 'credit_card' || d.type === 'overdraft') {
+      return d.usedAmount !== undefined ? d.usedAmount : (d.currentBalance || 0);
+    }
+    return d.currentBalance !== undefined ? d.currentBalance : (d.usedAmount || 0);
+  }
+
   // ─── S15: Net Likidite Kazanımı ───────────────────────────────
   netLiquidityGain(tx) {
     const netGain = tx.netCashReceived - (tx.fees || 0);
@@ -147,9 +154,9 @@ class CrisisEngine {
 
   // ─── S20: Zorunlu Karşılaştırma ──────────────────────────────
   mandatoryComparison(tx) {
-    const totalDebt = this.debts.reduce((s, d) => s + d.currentBalance, 0);
+    const totalDebt = this.debts.reduce((s, d) => s + CrisisEngine._bal(d), 0);
     const weightedRate = this.debts.reduce((s, d) =>
-      s + (d.currentBalance / totalDebt) * d.interestRate, 0);
+      s + (CrisisEngine._bal(d) / totalDebt) * d.interestRate, 0);
 
     const scenarios = [];
 

@@ -87,29 +87,91 @@ function validate(body, rules) {
 const TCMB_OVERDRAFT_MONTHLY_RATE = 4.25; // % aylık
 
 /**
- * Bir borcun aylık minimum ödeme tutarını hesaplar.
- * - Kredi kartı: kullanıcı girdiyse o değer, yoksa ekstre borcunun %40'ı
- * - Ek hesap: kullanıcı girdiyse o değer, yoksa bakiye × TCMB aylık faiz oranı
- * - Diğer (tüketici kredisi vb.): kullanıcı girdiyse o değer, yoksa 0
+ * Borcun bakiyesini döndürür — tür farkını soyutlar.
+ * - credit_card / overdraft: usedAmount (yoksa geriye uyumluluk için currentBalance)
+ * - loan: currentBalance
  */
-function getEffectiveMinPayment(debt) {
-  if (debt.currentBalance <= 0) return 0;
+function getDebtBalance(debt) {
+  if (debt.type === 'credit_card' || debt.type === 'overdraft') {
+    return debt.usedAmount !== undefined ? debt.usedAmount : (debt.currentBalance || 0);
+  }
+  return debt.currentBalance !== undefined ? debt.currentBalance : (debt.usedAmount || 0);
+}
 
-  // Kullanıcı açıkça minPayment girdiyse onu kullan
-  if (debt.minPayment && debt.minPayment > 0) return debt.minPayment;
+/**
+ * Kredi kartı ekstre bakiyesini hesaplar.
+ * statementBalance = usedAmount + bu ayki taksit tutarları (creditCardId eşleşen)
+ */
+function getCreditCardStatementBalance(debt, installments) {
+  const balance = getDebtBalance(debt);
+  if (debt.type !== 'credit_card' || !installments) return balance;
+
+  const now = new Date();
+  const thisMonth = now.getMonth() + 1;
+  const thisYear = now.getFullYear();
+
+  const monthlyInstallmentTotal = installments
+    .filter(i => i.creditCardId === debt.id && i.isActive && (i.installmentCount - i.paidCount) > 0)
+    .reduce((s, i) => {
+      // Taksit bu ay aktif mi kontrol et
+      let m = i.startMonth + i.paidCount;
+      let y = i.startYear;
+      while (m > 12) { m -= 12; y++; }
+      // Bu ayın taksiti veya gelecek taksitler varsa bu ayın payını ekle
+      if (y < thisYear || (y === thisYear && m <= thisMonth)) {
+        return s + i.monthlyAmount;
+      }
+      return s;
+    }, 0);
+
+  return balance + monthlyInstallmentTotal;
+}
+
+/**
+ * Kredi kartına bağlı taksitlerin kalan toplam tutarı (gelecek aylar dahil).
+ * Kart limitinden bloke edilen tutar.
+ */
+function getCreditCardBlockedByInstallments(debt, installments) {
+  if (debt.type !== 'credit_card' || !installments) return 0;
+  return installments
+    .filter(i => i.creditCardId === debt.id && i.isActive)
+    .reduce((s, i) => {
+      const remaining = i.installmentCount - i.paidCount;
+      return s + (remaining > 0 ? remaining * i.monthlyAmount : 0);
+    }, 0);
+}
+
+/**
+ * Bir borcun aylık minimum ödeme tutarını hesaplar.
+ * - Kredi kartı: statementBalance × (minPaymentRate / 100)
+ * - Ek hesap: usedAmount × (tcmbMonthlyRate / 100)
+ * - Kredi: monthlyPayment (sabit taksit)
+ * - Diğer: kullanıcı girdiyse o değer, yoksa 0
+ * @param {Object} debt
+ * @param {Array}  installments - taksit listesi (kredi kartı ekstre hesabı için)
+ */
+function getEffectiveMinPayment(debt, installments) {
+  const balance = getDebtBalance(debt);
+  if (balance <= 0) return 0;
 
   switch (debt.type) {
-    case 'credit_card':
-      // Default: ekstre borcunun %40'ı
-      return Math.round(debt.currentBalance * 0.40);
+    case 'credit_card': {
+      const statementBalance = getCreditCardStatementBalance(debt, installments);
+      const minPaymentRate = (debt.minPaymentRate || 40) / 100;
+      return Math.round(statementBalance * minPaymentRate);
+    }
 
-    case 'overdraft':
-      // Default: TCMB aylık faiz oranı üzerinden hesaplanan faiz tutarı
-      // Günlük faiz işlenir ama aylık oran TCMB tarafından belirlenir
+    case 'overdraft': {
       const monthlyRate = (debt.tcmbMonthlyRate || TCMB_OVERDRAFT_MONTHLY_RATE) / 100;
-      return Math.round(debt.currentBalance * monthlyRate);
+      return Math.round(balance * monthlyRate);
+    }
+
+    case 'loan':
+      return debt.monthlyPayment || debt.minPayment || 0;
 
     default:
+      // Geriye uyumluluk: eski minPayment alanı varsa kullan
+      if (debt.minPayment && debt.minPayment > 0) return debt.minPayment;
       return 0;
   }
 }
@@ -186,36 +248,115 @@ router.delete('/transactions/:id', (req, res) => {
 // ═══════════════════════════════════════════════════════════════════
 
 router.get('/debts', (req, res) => {
-  res.json(readData('debts'));
+  const debts = readData('debts');
+  const installments = readData('installments');
+
+  const enriched = debts.map(debt => {
+    const balance = getDebtBalance(debt);
+    const effectiveMinPayment = getEffectiveMinPayment(debt, installments);
+
+    switch (debt.type) {
+      case 'credit_card': {
+        const blockedByInstallments = getCreditCardBlockedByInstallments(debt, installments);
+        const statementBalance = getCreditCardStatementBalance(debt, installments);
+        const availableLimit = (debt.limit || 0) - balance - blockedByInstallments;
+        return {
+          ...debt,
+          blockedByInstallments: Math.round(blockedByInstallments),
+          availableLimit: Math.round(Math.max(0, availableLimit)),
+          statementBalance: Math.round(statementBalance),
+          effectiveMinPayment: Math.round(effectiveMinPayment),
+        };
+      }
+
+      case 'overdraft': {
+        const monthlyRate = (debt.tcmbMonthlyRate || TCMB_OVERDRAFT_MONTHLY_RATE) / 100;
+        const monthlyInterest = Math.round(balance * monthlyRate);
+        const availableLimit = (debt.limit || 0) - balance;
+        return {
+          ...debt,
+          availableLimit: Math.round(Math.max(0, availableLimit)),
+          monthlyInterest,
+          effectiveMinPayment: Math.round(effectiveMinPayment),
+        };
+      }
+
+      case 'loan':
+        return {
+          ...debt,
+          effectiveMinPayment: Math.round(effectiveMinPayment),
+        };
+
+      default:
+        return { ...debt, effectiveMinPayment: Math.round(effectiveMinPayment) };
+    }
+  });
+
+  res.json(enriched);
 });
 
 router.post('/debts', (req, res) => {
   const debts = readData('debts');
   const debtType = req.body.type || 'credit_card';
 
-  // Ek hesap default faiz: TCMB aylık %4.25
-  let defaultInterestRate = 0;
-  if (debtType === 'overdraft') {
-    defaultInterestRate = TCMB_OVERDRAFT_MONTHLY_RATE; // Aylık %
-  }
-
-  const newDebt = {
+  let newDebt;
+  const base = {
     id: generateId(),
     name: req.body.name,
     type: debtType,
-    principalAmount: parseFloat(req.body.principalAmount || 0),
-    currentBalance: parseFloat(req.body.currentBalance || 0),
-    interestRate: parseFloat(req.body.interestRate || defaultInterestRate), // Aylık %
-    minPayment: parseFloat(req.body.minPayment || 0), // 0 = otomatik hesapla
-    tcmbMonthlyRate: debtType === 'overdraft' ? parseFloat(req.body.tcmbMonthlyRate || TCMB_OVERDRAFT_MONTHLY_RATE) : undefined,
-    dueDate: req.body.dueDate || null,
-    startDate: req.body.startDate || new Date().toISOString().split('T')[0],
-    endDate: req.body.endDate || null,
     payments: [],
     createdAt: new Date().toISOString()
   };
+
+  switch (debtType) {
+    case 'credit_card':
+      newDebt = {
+        ...base,
+        limit: parseFloat(req.body.limit || 0),
+        usedAmount: parseFloat(req.body.usedAmount || req.body.currentBalance || 0),
+        interestRate: parseFloat(req.body.interestRate || 0),          // Aylık %
+        statementDay: parseInt(req.body.statementDay || 1),            // Ekstre kesim günü
+        paymentDueDay: parseInt(req.body.paymentDueDay || 15),         // Son ödeme günü
+        minPaymentRate: parseFloat(req.body.minPaymentRate || 40),     // Asgari ödeme oranı %
+      };
+      break;
+
+    case 'overdraft':
+      newDebt = {
+        ...base,
+        limit: parseFloat(req.body.limit || 0),
+        usedAmount: parseFloat(req.body.usedAmount || req.body.currentBalance || 0),
+        interestRate: parseFloat(req.body.interestRate || TCMB_OVERDRAFT_MONTHLY_RATE),
+        tcmbMonthlyRate: parseFloat(req.body.tcmbMonthlyRate || TCMB_OVERDRAFT_MONTHLY_RATE),
+      };
+      break;
+
+    case 'loan':
+      newDebt = {
+        ...base,
+        principalAmount: parseFloat(req.body.principalAmount || 0),
+        currentBalance: parseFloat(req.body.currentBalance || 0),
+        monthlyPayment: parseFloat(req.body.monthlyPayment || 0),
+        interestRate: parseFloat(req.body.interestRate || 0),          // Aylık %
+        remainingMonths: parseInt(req.body.remainingMonths || 0),
+        dueDate: req.body.dueDate || null,
+      };
+      break;
+
+    default:
+      // Geriye uyumluluk: eski format
+      newDebt = {
+        ...base,
+        currentBalance: parseFloat(req.body.currentBalance || req.body.usedAmount || 0),
+        interestRate: parseFloat(req.body.interestRate || 0),
+        minPayment: parseFloat(req.body.minPayment || 0),
+        dueDate: req.body.dueDate || null,
+      };
+  }
+
   debts.push(newDebt);
   writeData('debts', debts);
+  addAuditLog('create', 'debt', newDebt.id, req.body.source || 'manual', newDebt.name);
   res.status(201).json(newDebt);
 });
 
@@ -378,15 +519,19 @@ router.get('/summary', (req, res) => {
 
   const totalIncome = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const totalExpense = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-  const totalDebt = debts.reduce((s, d) => s + d.currentBalance, 0);
-  const totalInterestPerMonth = debts.reduce((s, d) => s + (d.currentBalance * (d.interestRate / 100)), 0);
-
-  // Monthly obligations: debt min payments + installments + recurring
   const installments = readData('installments');
   const recurring = readData('recurring');
 
-  const debtMinPayments = debts.reduce((s, d) => s + getEffectiveMinPayment(d), 0);
-  const installmentPayments = installments.filter(i => i.isActive && (i.installmentCount - i.paidCount) > 0).reduce((s, i) => s + i.monthlyAmount, 0);
+  const totalDebt = debts.reduce((s, d) => s + getDebtBalance(d), 0);
+  const totalInterestPerMonth = debts.reduce((s, d) => s + (getDebtBalance(d) * (d.interestRate / 100)), 0);
+
+  // Monthly obligations: debt min payments + installments + recurring
+  const debtMinPayments = debts.reduce((s, d) => s + getEffectiveMinPayment(d, installments), 0);
+  // Taksitler kredi kartı borcunun parçasıdır, ayrı yükümlülük DEĞİLDİR
+  // Sadece kredi kartına bağlı OLMAYAN taksitler (nadir durum) yükümlülüğe eklenir
+  const installmentPayments = installments
+    .filter(i => i.isActive && (i.installmentCount - i.paidCount) > 0 && !i.creditCardId)
+    .reduce((s, i) => s + i.monthlyAmount, 0);
   const recurringPayments = recurring.filter(r => {
     if (!r.isActive) return false;
     let endMonth = r.startMonth + r.durationMonths - 1;
@@ -484,12 +629,13 @@ router.get('/remaining-budget/:year/:month', (req, res) => {
 
 router.get('/analysis/debt-payoff', (req, res) => {
   const debts = readData('debts');
+  const installments = readData('installments');
   const extraPayment = parseFloat(req.query.extraPayment || 0);
 
   const analysis = debts.map(debt => {
     const monthlyRate = debt.interestRate / 100;
-    const balance = debt.currentBalance;
-    const effectiveMin = getEffectiveMinPayment(debt);
+    const balance = getDebtBalance(debt);
+    const effectiveMin = getEffectiveMinPayment(debt, installments);
 
     // Minimum payment scenario
     const minScenario = simulatePayoff(balance, monthlyRate, effectiveMin);
@@ -501,7 +647,8 @@ router.get('/analysis/debt-payoff', (req, res) => {
     return {
       debtId: debt.id,
       name: debt.name,
-      currentBalance: balance,
+      balance: balance,
+      currentBalance: balance, // geriye uyumluluk
       interestRate: debt.interestRate,
       monthlyInterest: Math.round(balance * monthlyRate * 100) / 100,
       minPayment: effectiveMin,
@@ -514,8 +661,8 @@ router.get('/analysis/debt-payoff', (req, res) => {
   });
 
   // Snowball vs Avalanche comparison
-  const snowball = calculateStrategy(debts, extraPayment, 'snowball');
-  const avalanche = calculateStrategy(debts, extraPayment, 'avalanche');
+  const snowball = calculateStrategy(debts, extraPayment, 'snowball', installments);
+  const avalanche = calculateStrategy(debts, extraPayment, 'avalanche', installments);
 
   res.json({ debts: analysis, snowball, avalanche });
 });
@@ -554,19 +701,19 @@ function simulatePayoff(balance, monthlyRate, payment) {
   return { months, totalInterest: Math.round(totalInterest * 100) / 100 };
 }
 
-function calculateStrategy(debts, extraPayment, strategy) {
+function calculateStrategy(debts, extraPayment, strategy, installments) {
   if (debts.length === 0) return { totalMonths: 0, totalInterest: 0 };
 
   let sorted = [...debts];
   if (strategy === 'snowball') {
-    sorted.sort((a, b) => a.currentBalance - b.currentBalance);
+    sorted.sort((a, b) => getDebtBalance(a) - getDebtBalance(b));
   } else {
     sorted.sort((a, b) => b.interestRate - a.interestRate);
   }
 
-  let balances = sorted.map(d => d.currentBalance);
+  let balances = sorted.map(d => getDebtBalance(d));
   const rates = sorted.map(d => d.interestRate / 100);
-  const minPayments = sorted.map(d => getEffectiveMinPayment(d));
+  const minPayments = sorted.map(d => getEffectiveMinPayment(d, installments));
   let totalInterest = 0;
   let months = 0;
 
@@ -627,12 +774,12 @@ router.get('/analysis/savings', (req, res) => {
   const avgIncome = months.length > 0 ? months.reduce((s, m) => s + m.income, 0) / months.length : 0;
   const avgExpense = months.length > 0 ? months.reduce((s, m) => s + m.expense, 0) / months.length : 0;
   const monthlySavings = avgIncome - avgExpense;
-  const totalDebt = debts.reduce((s, d) => s + d.currentBalance, 0);
+  const totalDebt = debts.reduce((s, d) => s + getDebtBalance(d), 0);
 
   // Weighted average monthly interest across all debts
   const totalMonthlyInterest = debts.reduce((s, d) => {
     const rate = d.interestRate / 100;
-    return s + (d.currentBalance * rate);
+    return s + (getDebtBalance(d) * rate);
   }, 0);
 
   // Projections — factor in debt interest growth
@@ -744,6 +891,7 @@ router.post('/installments', (req, res) => {
     monthlyAmount: Math.round(monthlyAmount * 100) / 100,
     remainingAmount: Math.round((parseInt(req.body.installmentCount) - paidCount) * monthlyAmount * 100) / 100,
     startYear, startMonth,
+    creditCardId: req.body.creditCardId || null, // Hangi kredi kartına ait
     category: req.body.category || 'cat-taksit',
     source: req.body.source || 'manual',
     isActive: true,
@@ -920,7 +1068,12 @@ router.post('/debts/:id/payments', (req, res) => {
 
   if (!debts[idx].payments) debts[idx].payments = [];
   debts[idx].payments.push(payment);
-  debts[idx].currentBalance = Math.max(0, debts[idx].currentBalance - payment.amount);
+  // Bakiye güncelle — tür bazlı alan seçimi
+  if (debts[idx].type === 'credit_card' || debts[idx].type === 'overdraft') {
+    debts[idx].usedAmount = Math.max(0, (debts[idx].usedAmount || debts[idx].currentBalance || 0) - payment.amount);
+  } else {
+    debts[idx].currentBalance = Math.max(0, (debts[idx].currentBalance || 0) - payment.amount);
+  }
 
   writeData('debts', debts);
   addAuditLog('payment', 'debt', debts[idx].id, 'manual', `${payment.amount} TL ödeme`);
@@ -997,8 +1150,8 @@ router.get('/recommendations', (req, res) => {
 
   const totalIncome = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const totalExpense = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-  const totalDebt = debts.reduce((s, d) => s + d.currentBalance, 0);
-  const totalInterest = debts.reduce((s, d) => s + (d.currentBalance * d.interestRate / 100), 0);
+  const totalDebt = debts.reduce((s, d) => s + getDebtBalance(d), 0);
+  const totalInterest = debts.reduce((s, d) => s + (getDebtBalance(d) * d.interestRate / 100), 0);
 
   // Debt-to-income ratio
   const dti = totalIncome > 0 ? (totalDebt / (totalIncome * 12)) * 100 : 0;
@@ -1133,8 +1286,8 @@ router.get('/analytics/ratios', (req, res) => {
 
   const totalIncome = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const totalExpense = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-  const totalDebt = debts.reduce((s, d) => s + d.currentBalance, 0);
-  const totalInterest = debts.reduce((s, d) => s + (d.currentBalance * d.interestRate / 100), 0);
+  const totalDebt = debts.reduce((s, d) => s + getDebtBalance(d), 0);
+  const totalInterest = debts.reduce((s, d) => s + (getDebtBalance(d) * d.interestRate / 100), 0);
   const fixedObligations = recurring.filter(r => r.isActive && r.type === 'expense')
     .reduce((s, r) => s + r.amount, 0);
 
@@ -1197,6 +1350,7 @@ router.get('/analytics/what-if', (req, res) => {
 
 router.get('/analysis/strategies', (req, res) => {
   const debts = readData('debts');
+  const installments = readData('installments');
   const transactions = readData('transactions').filter(t => t.status !== 'rejected');
   const extraPayment = parseFloat(req.query.extraPayment || 0);
 
@@ -1217,11 +1371,11 @@ router.get('/analysis/strategies', (req, res) => {
     : 0;
 
   const strategies = [
-    { name: 'avalanche', label: 'Avalanche (Yüksek Faiz Önce)', ...calculateStrategy(debts, extraPayment, 'avalanche') },
-    { name: 'snowball', label: 'Snowball (Küçük Borç Önce)', ...calculateStrategy(debts, extraPayment, 'snowball') },
-    { name: 'minimum', label: 'Minimum Ödeme', ...calculateStrategy(debts, 0, 'avalanche') },
-    { name: 'aggressive', label: 'Agresif (Tüm Fazla Borça)', ...calculateStrategy(debts, Math.max(0, avgSurplus), 'avalanche') },
-    { name: 'balanced', label: 'Dengeli (%60 Borç, %40 Tasarruf)', ...calculateStrategy(debts, Math.max(0, avgSurplus * 0.6), 'avalanche') }
+    { name: 'avalanche', label: 'Avalanche (Yüksek Faiz Önce)', ...calculateStrategy(debts, extraPayment, 'avalanche', installments) },
+    { name: 'snowball', label: 'Snowball (Küçük Borç Önce)', ...calculateStrategy(debts, extraPayment, 'snowball', installments) },
+    { name: 'minimum', label: 'Minimum Ödeme', ...calculateStrategy(debts, 0, 'avalanche', installments) },
+    { name: 'aggressive', label: 'Agresif (Tüm Fazla Borça)', ...calculateStrategy(debts, Math.max(0, avgSurplus), 'avalanche', installments) },
+    { name: 'balanced', label: 'Dengeli (%60 Borç, %40 Tasarruf)', ...calculateStrategy(debts, Math.max(0, avgSurplus * 0.6), 'avalanche', installments) }
   ];
 
   strategies.forEach(s => {
@@ -1262,13 +1416,22 @@ router.get('/upcoming-payments', (req, res) => {
     }
   });
 
-  // Active installments
+  // Active installments — bilgilendirme amaçlı (kredi kartı borcunun parçası)
+  // Taksitler ayrı borç değildir, ilgili ayın taksiti kredi kartı ekstresine yansır
+  const debts = readData('debts');
   installments.filter(i => i.isActive).forEach(inst => {
     const remaining = inst.installmentCount - inst.paidCount;
     if (remaining > 0) {
+      const linkedCard = inst.creditCardId ? debts.find(d => d.id === inst.creditCardId) : null;
       upcoming.push({
-        type: 'installment', name: inst.name, amount: inst.monthlyAmount,
-        category: inst.category, remaining: `${inst.paidCount}/${inst.installmentCount}`,
+        type: 'installment',
+        name: inst.name,
+        amount: inst.monthlyAmount,
+        category: inst.category,
+        remaining: `${inst.paidCount}/${inst.installmentCount}`,
+        creditCardId: inst.creditCardId || null,
+        creditCardName: linkedCard ? linkedCard.name : null,
+        isInfoOnly: !!inst.creditCardId, // KK'ya bağlıysa toplama dahil etme
         dueDate: `${year}-${String(month).padStart(2, '0')}-01`
       });
     }
@@ -1277,10 +1440,10 @@ router.get('/upcoming-payments', (req, res) => {
   // Debt minimum payments (credit cards, overdrafts, loans)
   // Kredi kartı: minPayment yoksa ekstre borcunun %40'ı
   // Ek hesap: minPayment yoksa TCMB aylık faiz (%4.25) × bakiye
-  const debts = readData('debts');
   debts.forEach(debt => {
-    const effectivePayment = getEffectiveMinPayment(debt);
-    if (debt.currentBalance > 0 && effectivePayment > 0) {
+    const effectivePayment = getEffectiveMinPayment(debt, installments);
+    const debtBalance = getDebtBalance(debt);
+    if (debtBalance > 0 && effectivePayment > 0) {
       const typeLabels = {
         'credit_card': '💳 Kredi Kartı',
         'overdraft': '🏦 Ek Hesap',
@@ -1290,7 +1453,7 @@ router.get('/upcoming-payments', (req, res) => {
       const label = typeLabels[debt.type] || '💰 Borç';
 
       // Ek hesap için faiz detayı
-      let detail = `Bakiye: ${debt.currentBalance.toLocaleString('tr-TR')}₺`;
+      let detail = `Bakiye: ${debtBalance.toLocaleString('tr-TR')}₺`;
       if (debt.type === 'overdraft') {
         const rate = debt.tcmbMonthlyRate || TCMB_OVERDRAFT_MONTHLY_RATE;
         detail += ` | TCMB Aylık: %${rate}`;
@@ -1513,7 +1676,7 @@ router.get('/survival/crisis-analysis', (req, res) => {
 
     // Analyze each recent crisis transaction
     const analyses = crisisTxs.slice(-5).map(tx => {
-      const totalDebt = debts.reduce((s, d) => s + d.currentBalance, 0);
+      const totalDebt = debts.reduce((s, d) => s + getDebtBalance(d), 0);
       const urgentPayments = recurring
         .filter(r => r.isActive && r.type === 'expense')
         .slice(0, 3)
@@ -1672,20 +1835,21 @@ router.get('/finance/interest-info', (req, res) => {
     const debts = readData('debts');
     const results = debts.map(d => {
       let model, info;
+      const bal = getDebtBalance(d);
       if (d.type === 'credit_card') {
         model = new DailyCompoundingInterest(d.interestRate * 12);
         info = model.info();
-        info.monthlyInterest = Math.round(model.monthlyInterest(d.currentBalance));
+        info.monthlyInterest = Math.round(model.monthlyInterest(bal));
         info.effectiveAnnualCompound = model.effectiveAnnualRate().toFixed(2) + '%';
       } else if (d.type === 'overdraft') {
         model = new MonthlyCompoundingInterest(d.interestRate);
         info = model.info();
-        info.monthlyInterest = Math.round(model.monthlyInterest(d.currentBalance));
+        info.monthlyInterest = Math.round(model.monthlyInterest(bal));
       } else {
-        model = new AnnuityLoanModel(d.interestRate * 12, d.remainingMonths || 24, d.currentBalance);
+        model = new AnnuityLoanModel(d.interestRate * 12, d.remainingMonths || 24, bal);
         info = model.info();
       }
-      return { debtName: d.name, debtType: d.type, balance: d.currentBalance, ...info };
+      return { debtName: d.name, debtType: d.type, balance: bal, ...info };
     });
     res.json({ debts: results, taxRates: { BSMV: '10%', KKDF: '15%' } });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -1708,10 +1872,11 @@ router.get('/finance/cashflow', (req, res) => {
     const debts = readData('debts');
 
     const interestCosts = debts.reduce((s, d) => {
+      const bal = getDebtBalance(d);
       if (d.type === 'credit_card') {
-        return s + new DailyCompoundingInterest(d.interestRate * 12).monthlyInterest(d.currentBalance);
+        return s + new DailyCompoundingInterest(d.interestRate * 12).monthlyInterest(bal);
       }
-      return s + (d.currentBalance * (d.interestRate / 100));
+      return s + (bal * (d.interestRate / 100));
     }, 0);
 
     const result = threeScenarioCashflow({
@@ -1741,7 +1906,8 @@ router.get('/finance/amortization/:debtId', (req, res) => {
     const debts = readData('debts');
     const debt = debts.find(d => d.id === req.params.debtId);
     if (!debt) return res.status(404).json({ error: 'Borç bulunamadı' });
-    const model = new AnnuityLoanModel(debt.interestRate * 12, debt.remainingMonths || 24, debt.currentBalance);
+    const bal = getDebtBalance(debt);
+    const model = new AnnuityLoanModel(debt.interestRate * 12, debt.remainingMonths || 24, bal);
     res.json({ ...model.info(), table: model.amortizationTable() });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

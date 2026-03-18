@@ -15,11 +15,13 @@ export class InstallmentsPage {
 
   async render() {
     try {
-      const [installments, categories] = await Promise.all([
+      const [installments, categories, debts] = await Promise.all([
         api.getInstallments(),
-        api.getCategories()
+        api.getCategories(),
+        api.getDebts()
       ]);
       this.categories = categories;
+      this.creditCards = debts.filter(d => d.type === 'credit_card');
 
       const active = installments.filter(i => i.isActive);
       const totalRemaining = active.reduce((s, i) => s + i.remainingAmount, 0);
@@ -59,12 +61,16 @@ export class InstallmentsPage {
             ${active.map((inst, idx) => {
               const progress = (inst.paidCount / inst.installmentCount) * 100;
               const cat = categories.find(c => c.id === inst.category);
+              const linkedCard = inst.creditCardId ? this.creditCards.find(c => c.id === inst.creditCardId) : null;
               return `
                 <div class="card fade-in stagger-${idx + 1}">
                   <div class="flex-between mb-md">
                     <div>
                       <h3 style="font-weight:700">${cat ? cat.icon : '💳'} ${inst.name}</h3>
-                      <p style="font-size:var(--font-xs);color:var(--text-muted)">${inst.startMonth}/${inst.startYear} başlangıç</p>
+                      <p style="font-size:var(--font-xs);color:var(--text-muted)">
+                        ${inst.startMonth}/${inst.startYear} başlangıç
+                        ${linkedCard ? ` · <span style="color:var(--accent-info)">💳 ${linkedCard.name}</span>` : ''}
+                      </p>
                     </div>
                     <button class="action-btn delete delete-inst" data-id="${inst.id}" title="Sil">🗑️</button>
                   </div>
@@ -114,12 +120,23 @@ export class InstallmentsPage {
 
   showForm() {
     const catOpts = this.categories.map(c => `<option value="${c.id}">${c.icon} ${c.name}</option>`).join('');
+    const ccOpts = this.creditCards.map(c => `<option value="${c.id}">💳 ${c.name}</option>`).join('');
     const now = new Date();
     this.openModal('Taksit Ekle', `
       <form id="addInstForm">
         <div class="form-group">
           <label class="form-label">Taksit Adı</label>
-          <input class="form-input" name="name" placeholder="Örn: iPhone Taksit" required>
+          <input class="form-input" name="name" placeholder="Örn: iPhone 15 Pro" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Kredi Kartı</label>
+          <select class="form-select" name="creditCardId">
+            <option value="">— Kart seçin —</option>
+            ${ccOpts}
+          </select>
+          <p style="font-size:var(--font-xs);color:var(--text-muted);margin-top:var(--space-xs)">
+            Taksit bu kartın borcuna dahil edilir, ayrı borç olarak sayılmaz
+          </p>
         </div>
         <div class="form-row">
           <div class="form-group">
@@ -168,6 +185,7 @@ export class InstallmentsPage {
         await api.addInstallment({
           name: f.name.value, totalAmount: parseFloat(f.totalAmount.value),
           installmentCount: parseInt(f.installmentCount.value), paidCount: parseInt(f.paidCount.value),
+          creditCardId: f.creditCardId.value || null,
           category: f.category.value, startYear: parseInt(f.startYear.value), startMonth: parseInt(f.startMonth.value)
         });
         this.onToast('Taksit eklendi!', 'success');
