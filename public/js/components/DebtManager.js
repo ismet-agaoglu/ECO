@@ -33,10 +33,15 @@ export class DebtManager {
         api.getDebtAnalysis(0)
       ]);
 
+      this.debts = debts;
+
       this.container.innerHTML = `
         <div class="section-header">
-          <h2 class="section-title">Borç Yönetimi</h2>
-          <button class="btn btn-primary" id="addDebtBtn">+ Borç Ekle</button>
+          <h2 class="section-title">Kredili Ürünler & Borçlar</h2>
+          <div class="flex gap-sm">
+            <button class="btn btn-outline" id="addChargeBtn">+ Borç Ekle</button>
+            <button class="btn btn-primary" id="addDebtBtn">+ Ürün Ekle</button>
+          </div>
         </div>
         ${this.renderDebtCards(debts, analysis)}
         ${this.renderStrategyComparison(analysis)}
@@ -233,7 +238,8 @@ export class DebtManager {
         </div>
         ${typeSpecificMeta}
         <div class="flex gap-sm mt-md">
-          <button class="btn btn-outline btn-sm delete-debt" data-id="${debt.id}" style="flex:1">Sil</button>
+          <button class="btn btn-outline btn-sm edit-debt" data-id="${debt.id}" style="flex:1">✏️ Düzenle</button>
+          <button class="btn btn-outline btn-sm delete-debt" data-id="${debt.id}" style="flex:1">🗑️ Sil</button>
         </div>
       </div>
     `;
@@ -332,13 +338,21 @@ export class DebtManager {
   }
 
   bindEvents(debts) {
-    document.getElementById('addDebtBtn')?.addEventListener('click', () => this.showAddForm());
+    document.getElementById('addDebtBtn')?.addEventListener('click', () => this.showAddProductForm());
+    document.getElementById('addChargeBtn')?.addEventListener('click', () => this.showAddChargeForm());
+
+    this.container.querySelectorAll('.edit-debt').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const debt = debts.find(d => d.id === btn.dataset.id);
+        if (debt) this.showEditForm(debt);
+      });
+    });
 
     this.container.querySelectorAll('.delete-debt').forEach(btn => {
       btn.addEventListener('click', async () => {
-        if (confirm('Bu borcu silmek istediginize emin misiniz?')) {
+        if (confirm('Bu ürünü silmek istediğinize emin misiniz?')) {
           await api.deleteDebt(btn.dataset.id);
-          this.onToast('Borc silindi', 'success');
+          this.onToast('Ürün silindi', 'success');
           this.render();
         }
       });
@@ -370,8 +384,8 @@ export class DebtManager {
     });
   }
 
-  showAddForm() {
-    this.openModal('Yeni Borc Ekle', `
+  showAddProductForm() {
+    this.openModal('Kredili Ürün Ekle', `
       <form id="addDebtForm">
         <div class="form-group">
           <label class="form-label">Borc Adi</label>
@@ -525,7 +539,222 @@ export class DebtManager {
 
       try {
         await api.addDebt(data);
-        this.onToast('Borc eklendi!', 'success');
+        this.onToast('Ürün eklendi!', 'success');
+        this.closeModal();
+        this.render();
+      } catch (err) {
+        this.onToast('Hata: ' + err.message, 'error');
+      }
+    });
+  }
+
+  showAddChargeForm() {
+    // Sadece kredi kartı ve ek hesap ürünlerine borç eklenebilir
+    const eligible = this.debts.filter(d => d.type === 'credit_card' || d.type === 'overdraft');
+    if (eligible.length === 0) {
+      this.onToast('Önce bir kredili ürün ekleyin', 'warning');
+      return;
+    }
+
+    const productOpts = eligible.map(d => {
+      const label = d.type === 'credit_card' ? '💳' : '🏦';
+      const bal = getBalance(d);
+      return `<option value="${d.id}">${label} ${d.name} (Kullanılan: ${formatCurrency(bal)})</option>`;
+    }).join('');
+
+    const today = new Date().toISOString().split('T')[0];
+
+    this.openModal('Borç Ekle', `
+      <form id="addChargeForm">
+        <div class="form-group">
+          <label class="form-label">Ürün Seçin</label>
+          <select class="form-select" name="productId" required>
+            ${productOpts}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tutar (₺)</label>
+          <input class="form-input" type="number" name="amount" step="1" min="1" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Açıklama</label>
+          <input class="form-input" type="text" name="description" placeholder="Örn: Elektronik alışveriş">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tarih</label>
+          <input class="form-input" type="date" name="date" value="${today}">
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-outline" id="cancelChargeBtn">İptal</button>
+          <button type="submit" class="btn btn-primary">Borç Ekle</button>
+        </div>
+      </form>
+    `);
+
+    document.getElementById('cancelChargeBtn')?.addEventListener('click', () => this.closeModal());
+    document.getElementById('addChargeForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const form = e.target;
+      const productId = form.productId.value;
+      const amount = parseFloat(form.amount.value);
+      const description = form.description.value || '';
+      const date = form.date.value;
+
+      try {
+        // Ürünün usedAmount'ını güncelle
+        const product = this.debts.find(d => d.id === productId);
+        const currentUsed = getBalance(product);
+        await api.updateDebt(productId, { usedAmount: currentUsed + amount });
+
+        // İşlem olarak da kaydet (expense)
+        await api.addTransaction({
+          date, type: 'expense', amount,
+          category: 'cat-diger',
+          description: `${product.name}: ${description}`,
+          source: 'manual'
+        });
+
+        this.onToast(`${formatCurrency(amount)} borç eklendi`, 'success');
+        this.closeModal();
+        this.render();
+      } catch (err) {
+        this.onToast('Hata: ' + err.message, 'error');
+      }
+    });
+  }
+
+  showEditForm(debt) {
+    let fieldsHtml = '';
+
+    if (debt.type === 'credit_card') {
+      fieldsHtml = `
+        <div class="form-group">
+          <label class="form-label">Kart Adı</label>
+          <input class="form-input" type="text" name="name" value="${debt.name}" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Kart Limiti (₺)</label>
+            <input class="form-input" type="number" name="limit" value="${debt.limit || 0}" step="1" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Kullanılan Tutar (₺)</label>
+            <input class="form-input" type="number" name="usedAmount" value="${getBalance(debt)}" step="1" min="0">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Aylık Faiz (%)</label>
+            <input class="form-input" type="number" name="interestRate" value="${debt.interestRate || 0}" step="0.01" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Asgari Ödeme Oranı (%)</label>
+            <input class="form-input" type="number" name="minPaymentRate" value="${debt.minPaymentRate || 40}" step="1" min="1" max="100">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Ekstre Kesim Günü</label>
+            <input class="form-input" type="number" name="statementDay" value="${debt.statementDay || 15}" step="1" min="1" max="31">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Son Ödeme Günü</label>
+            <input class="form-input" type="number" name="paymentDueDay" value="${debt.paymentDueDay || 5}" step="1" min="1" max="31">
+          </div>
+        </div>
+      `;
+    } else if (debt.type === 'overdraft') {
+      fieldsHtml = `
+        <div class="form-group">
+          <label class="form-label">Hesap Adı</label>
+          <input class="form-input" type="text" name="name" value="${debt.name}" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Ek Hesap Limiti (₺)</label>
+            <input class="form-input" type="number" name="limit" value="${debt.limit || 0}" step="1" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Kullanılan Tutar (₺)</label>
+            <input class="form-input" type="number" name="usedAmount" value="${getBalance(debt)}" step="1" min="0">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">TCMB Aylık Faiz (%)</label>
+          <input class="form-input" type="number" name="interestRate" value="${debt.interestRate || 4.25}" step="0.01" min="0">
+        </div>
+      `;
+    } else if (debt.type === 'loan') {
+      fieldsHtml = `
+        <div class="form-group">
+          <label class="form-label">Kredi Adı</label>
+          <input class="form-input" type="text" name="name" value="${debt.name}" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Çekilen Kredi (₺)</label>
+            <input class="form-input" type="number" name="principalAmount" value="${debt.principalAmount || 0}" step="1" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Kalan Ana Para (₺)</label>
+            <input class="form-input" type="number" name="currentBalance" value="${debt.currentBalance || 0}" step="1" min="0">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Aylık Taksit (₺)</label>
+            <input class="form-input" type="number" name="monthlyPayment" value="${debt.monthlyPayment || debt.minPayment || 0}" step="1" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Aylık Faiz (%)</label>
+            <input class="form-input" type="number" name="interestRate" value="${debt.interestRate || 0}" step="0.01" min="0">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Kalan Ay</label>
+            <input class="form-input" type="number" name="remainingMonths" value="${debt.remainingMonths || 0}" step="1" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Ödeme Günü</label>
+            <input class="form-input" type="number" name="dueDate" value="${debt.dueDate || 1}" step="1" min="1" max="31">
+          </div>
+        </div>
+      `;
+    }
+
+    const typeLabel = debt.type === 'credit_card' ? 'Kredi Kartı' : debt.type === 'overdraft' ? 'Ek Hesap' : 'Tüketici Kredisi';
+
+    this.openModal(`${typeLabel} Düzenle`, `
+      <form id="editDebtForm">
+        ${fieldsHtml}
+        <div class="form-actions">
+          <button type="button" class="btn btn-outline" id="cancelEditBtn">İptal</button>
+          <button type="submit" class="btn btn-primary">Kaydet</button>
+        </div>
+      </form>
+    `);
+
+    document.getElementById('cancelEditBtn')?.addEventListener('click', () => this.closeModal());
+    document.getElementById('editDebtForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const form = e.target;
+      const updates = {};
+
+      // Tüm form alanlarını topla
+      for (const el of form.elements) {
+        if (el.name && el.name !== '' && el.type !== 'button' && el.type !== 'submit') {
+          if (el.type === 'number') {
+            updates[el.name] = parseFloat(el.value) || 0;
+          } else {
+            updates[el.name] = el.value;
+          }
+        }
+      }
+
+      try {
+        await api.updateDebt(debt.id, updates);
+        this.onToast('Ürün güncellendi!', 'success');
         this.closeModal();
         this.render();
       } catch (err) {
