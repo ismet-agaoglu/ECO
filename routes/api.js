@@ -81,6 +81,39 @@ function validate(body, rules) {
   return errors;
 }
 
+// ─── TCMB Ek Hesap Faiz Oranı ─────────────────────────────────────
+// TCMB belirlediği aylık ek hesap (KMH) faiz oranı: %4.25
+// Ek hesaplarda faiz günlük işlenir, aylık oran TCMB tarafından belirlenir
+const TCMB_OVERDRAFT_MONTHLY_RATE = 4.25; // % aylık
+
+/**
+ * Bir borcun aylık minimum ödeme tutarını hesaplar.
+ * - Kredi kartı: kullanıcı girdiyse o değer, yoksa ekstre borcunun %40'ı
+ * - Ek hesap: kullanıcı girdiyse o değer, yoksa bakiye × TCMB aylık faiz oranı
+ * - Diğer (tüketici kredisi vb.): kullanıcı girdiyse o değer, yoksa 0
+ */
+function getEffectiveMinPayment(debt) {
+  if (debt.currentBalance <= 0) return 0;
+
+  // Kullanıcı açıkça minPayment girdiyse onu kullan
+  if (debt.minPayment && debt.minPayment > 0) return debt.minPayment;
+
+  switch (debt.type) {
+    case 'credit_card':
+      // Default: ekstre borcunun %40'ı
+      return Math.round(debt.currentBalance * 0.40);
+
+    case 'overdraft':
+      // Default: TCMB aylık faiz oranı üzerinden hesaplanan faiz tutarı
+      // Günlük faiz işlenir ama aylık oran TCMB tarafından belirlenir
+      const monthlyRate = (debt.tcmbMonthlyRate || TCMB_OVERDRAFT_MONTHLY_RATE) / 100;
+      return Math.round(debt.currentBalance * monthlyRate);
+
+    default:
+      return 0;
+  }
+}
+
 // ─── Initialize ────────────────────────────────────────────────────
 ensureDataDir();
 
@@ -158,14 +191,23 @@ router.get('/debts', (req, res) => {
 
 router.post('/debts', (req, res) => {
   const debts = readData('debts');
+  const debtType = req.body.type || 'credit_card';
+
+  // Ek hesap default faiz: TCMB aylık %4.25 → yıllık %51 (4.25 × 12)
+  let defaultInterestRate = 0;
+  if (debtType === 'overdraft') {
+    defaultInterestRate = TCMB_OVERDRAFT_MONTHLY_RATE * 12; // %51 yıllık
+  }
+
   const newDebt = {
     id: generateId(),
     name: req.body.name,
-    type: req.body.type || 'credit_card', // credit_card | overdraft | loan | installment
+    type: debtType,
     principalAmount: parseFloat(req.body.principalAmount || 0),
     currentBalance: parseFloat(req.body.currentBalance || 0),
-    interestRate: parseFloat(req.body.interestRate || 0), // Annual %
-    minPayment: parseFloat(req.body.minPayment || 0),
+    interestRate: parseFloat(req.body.interestRate || defaultInterestRate), // Annual %
+    minPayment: parseFloat(req.body.minPayment || 0), // 0 = otomatik hesapla
+    tcmbMonthlyRate: debtType === 'overdraft' ? parseFloat(req.body.tcmbMonthlyRate || TCMB_OVERDRAFT_MONTHLY_RATE) : undefined,
     dueDate: req.body.dueDate || null,
     startDate: req.body.startDate || new Date().toISOString().split('T')[0],
     endDate: req.body.endDate || null,
@@ -343,7 +385,7 @@ router.get('/summary', (req, res) => {
   const installments = readData('installments');
   const recurring = readData('recurring');
 
-  const debtMinPayments = debts.filter(d => d.currentBalance > 0 && d.minPayment > 0).reduce((s, d) => s + d.minPayment, 0);
+  const debtMinPayments = debts.reduce((s, d) => s + getEffectiveMinPayment(d), 0);
   const installmentPayments = installments.filter(i => i.isActive && (i.installmentCount - i.paidCount) > 0).reduce((s, i) => s + i.monthlyAmount, 0);
   const recurringPayments = recurring.filter(r => {
     if (!r.isActive) return false;
@@ -1155,9 +1197,12 @@ router.get('/upcoming-payments', (req, res) => {
   });
 
   // Debt minimum payments (credit cards, overdrafts, loans)
+  // Kredi kartı: minPayment yoksa ekstre borcunun %40'ı
+  // Ek hesap: minPayment yoksa TCMB aylık faiz (%4.25) × bakiye
   const debts = readData('debts');
   debts.forEach(debt => {
-    if (debt.currentBalance > 0 && debt.minPayment > 0) {
+    const effectivePayment = getEffectiveMinPayment(debt);
+    if (debt.currentBalance > 0 && effectivePayment > 0) {
       const typeLabels = {
         'credit_card': '💳 Kredi Kartı',
         'overdraft': '🏦 Ek Hesap',
@@ -1165,14 +1210,28 @@ router.get('/upcoming-payments', (req, res) => {
         'installment': '💰 Kredi Taksit'
       };
       const label = typeLabels[debt.type] || '💰 Borç';
+
+      // Ek hesap için faiz detayı
+      let detail = `Bakiye: ${debt.currentBalance.toLocaleString('tr-TR')}₺`;
+      if (debt.type === 'overdraft') {
+        const rate = debt.tcmbMonthlyRate || TCMB_OVERDRAFT_MONTHLY_RATE;
+        detail += ` | TCMB Aylık: %${rate}`;
+        if (!debt.minPayment || debt.minPayment === 0) detail += ' (otomatik)';
+      } else if (debt.type === 'credit_card') {
+        detail += ` | Faiz: %${debt.interestRate}`;
+        if (!debt.minPayment || debt.minPayment === 0) detail += ' (ekstre %40)';
+      } else {
+        detail += ` | Faiz: %${debt.interestRate}`;
+      }
+
       upcoming.push({
         type: 'debt',
         debtType: debt.type,
         name: `${label}: ${debt.name}`,
-        amount: debt.minPayment,
+        amount: effectivePayment,
         category: 'debt-payment',
         dueDate: debt.dueDate ? `${year}-${String(month).padStart(2, '0')}-${String(debt.dueDate).padStart(2, '0')}` : `${year}-${String(month).padStart(2, '0')}-01`,
-        detail: `Bakiye: ${debt.currentBalance.toLocaleString('tr-TR')}₺ | Faiz: %${debt.interestRate}`
+        detail
       });
     }
   });
