@@ -855,9 +855,26 @@ function simulateDebtPayoff(debt, extraPayment, installments) {
   }
 }
 
-function calculateStrategy(debts, extraPayment, strategy, installments) {
-  if (debts.length === 0) return { totalMonths: 0, totalInterest: 0 };
+/**
+ * Borç ödeme stratejisi simülasyonu.
+ *
+ * Doğru avalanche/snowball mantığı:
+ * 1. İlk ayın minimum ödemelerini hesapla → toplam bütçe = minimumlar + ekstra
+ * 2. Her ay: faiz ekle → minimum hesapla → bütçeden minimumları öde →
+ *    kalan bütçeyi öncelikli borca yönlendir (cascade)
+ * 3. Bir borç kapandığında, onun minimum ödemesi serbest kalır ve
+ *    sonraki aylarda öncelikli borca eklenir (snowball etkisi).
+ *
+ * @param {Array}  debts        - Borç listesi
+ * @param {number} extraPayment - Kullanıcının belirlediği ek ödeme (₺)
+ * @param {string} strategy     - 'avalanche' | 'snowball'
+ * @param {Array}  installments - Taksit listesi
+ * @param {boolean} cascadeFreed - true ise kapanan borcun minimumu diğerine aktarılır
+ */
+function calculateStrategy(debts, extraPayment, strategy, installments, cascadeFreed = true) {
+  if (debts.length === 0) return { totalMonths: 0, totalInterest: 0, converged: true };
 
+  // ── Sıralama ──────────────────────────────────────────────
   let sorted = [...debts];
   if (strategy === 'snowball') {
     sorted.sort((a, b) => getDebtBalance(a) - getDebtBalance(b));
@@ -865,61 +882,139 @@ function calculateStrategy(debts, extraPayment, strategy, installments) {
     sorted.sort((a, b) => b.interestRate - a.interestRate);
   }
 
-  let balances = sorted.map(d => getDebtBalance(d));
-  const rates = sorted.map(d => d.interestRate / 100);
-  const types = sorted.map(d => d.type);
-  const paymentRates = sorted.map(d => (d.minPaymentRate || 40) / 100);
-  const fixedPayments = sorted.map(d => {
-    if (d.type === 'credit_card') return 0; // Kredi kartı yüzdesel hesaplanır
-    return getEffectiveMinPayment(d, installments);
-  });
-  let totalInterest = 0;
-  let months = 0;
+  const n = sorted.length;
+  const names     = sorted.map(d => d.name);
+  let   balances  = sorted.map(d => getDebtBalance(d));
+  const initBals  = [...balances];
+  const rates     = sorted.map(d => d.interestRate / 100);
+  const types     = sorted.map(d => d.type);
+  const minRates  = sorted.map(d => (d.minPaymentRate || 40) / 100);
+  const loanFixed = sorted.map(d =>
+    d.type === 'loan' ? (d.monthlyPayment || d.minPayment || 0) : 0
+  );
 
-  const maxMonths = 360;
-  const floorPayment = 200; // Kredi kartı taban asgari ödeme
+  const FLOOR = 200;      // KK asgari taban
+  const MAX_MONTHS = 360;
 
-  while (balances.some(b => b > 0.5) && months < maxMonths) {
-    let extra = extraPayment;
-
-    for (let i = 0; i < balances.length; i++) {
-      if (balances[i] <= 0.5) continue;
-
-      const interest = balances[i] * rates[i];
-      totalInterest += interest;
-      const statement = balances[i] + interest;
-
-      // Her ay minimum ödemeyi yeniden hesapla
-      let payment;
-      if (types[i] === 'credit_card') {
-        payment = Math.max(statement * paymentRates[i], floorPayment);
-      } else {
-        payment = fixedPayments[i];
-      }
-
-      // Apply extra to first non-zero debt (strategy target)
-      if (extra > 0 && i === balances.findIndex(b => b > 0.5)) {
-        payment += extra;
-      }
-
-      payment = Math.min(payment, statement); // Ekstre fazlası ödenmez
-      balances[i] = statement - payment;
-      if (balances[i] < 0.5) {
-        extra = Math.abs(balances[i]);
-        balances[i] = 0;
-      }
+  // ── Yardımcı: bir borcun o anki minimum ödemesi ──────────
+  function calcMin(i, interest_i) {
+    if (balances[i] <= 0.5) return 0;
+    const bal = balances[i]; // faiz eklendikten sonraki bakiye
+    let m;
+    if (types[i] === 'credit_card') {
+      m = Math.max(bal * minRates[i], FLOOR);
+    } else if (types[i] === 'loan') {
+      m = loanFixed[i];
+    } else {
+      // Overdraft/diğer: minimum = o ayki faiz (bakiye sabit kalsın)
+      m = interest_i;
     }
-    months++;
+    return Math.min(m, bal);
   }
 
-  const allPaid = balances.every(b => b <= 0);
+  // ── İlk ay minimumları → toplam bütçe ────────────────────
+  let initMins = new Array(n).fill(0);
+  for (let i = 0; i < n; i++) {
+    if (balances[i] <= 0.5) continue;
+    const interest = balances[i] * rates[i];
+    // Geçici olarak faiz ekle, minimum hesapla, geri al
+    balances[i] += interest;
+    initMins[i] = calcMin(i, interest);
+    balances[i] -= interest;
+  }
+  const totalBudget = cascadeFreed
+    ? initMins.reduce((s, m) => s + m, 0) + extraPayment
+    : 0; // cascade kapalıysa sabit bütçe yok
+
+  // ── Simülasyon ────────────────────────────────────────────
+  let totalInterest = 0;
+  let totalPaid = 0;
+  let months = 0;
+  const milestones = [];  // { debt, month, interestPaid }
+  const monthlySnapshots = []; // ilk 6 ay + her 6 ayda bir
+
+  while (balances.some(b => b > 0.5) && months < MAX_MONTHS) {
+    months++;
+
+    // 1) Faiz hesapla & ekle
+    const interests = new Array(n).fill(0);
+    for (let i = 0; i < n; i++) {
+      if (balances[i] <= 0.5) continue;
+      interests[i] = balances[i] * rates[i];
+      totalInterest += interests[i];
+      balances[i] += interests[i];
+    }
+
+    // 2) Minimumları hesapla
+    const mins = new Array(n).fill(0);
+    for (let i = 0; i < n; i++) {
+      mins[i] = calcMin(i, interests[i]);
+    }
+    const sumMins = mins.reduce((s, m) => s + m, 0);
+
+    // 3) Bu ay kullanılabilir bütçe
+    let available;
+    if (cascadeFreed) {
+      // Sabit toplam bütçe — borç kapandıkça serbest kalan minimum otomatik artar
+      available = Math.max(totalBudget, sumMins);
+    } else {
+      // Minimum-only: sadece minimumları öde + extra
+      available = sumMins + extraPayment;
+    }
+
+    // 4) Önce minimumları öde
+    for (let i = 0; i < n; i++) {
+      if (balances[i] <= 0.5) continue;
+      const pay = Math.min(mins[i], balances[i]);
+      balances[i] -= pay;
+      available -= pay;
+      totalPaid += pay;
+      if (balances[i] < 0.5) {
+        balances[i] = 0;
+        milestones.push({ debt: names[i], month: months });
+      }
+    }
+
+    // 5) Kalan bütçeyi öncelikli borca yönlendir (cascade)
+    for (let i = 0; i < n; i++) {
+      if (available <= 0.5) break;
+      if (balances[i] <= 0.5) continue;
+      const pay = Math.min(available, balances[i]);
+      balances[i] -= pay;
+      available -= pay;
+      totalPaid += pay;
+      if (balances[i] < 0.5) {
+        balances[i] = 0;
+        milestones.push({ debt: names[i], month: months });
+      }
+    }
+
+    // Snapshot kaydet
+    if (months <= 6 || months % 6 === 0) {
+      monthlySnapshots.push({
+        month: months,
+        remaining: Math.round(balances.reduce((s, b) => s + b, 0)),
+        interest: Math.round(interests.reduce((s, v) => s + v, 0)),
+        balances: balances.map(b => Math.round(b))
+      });
+    }
+  }
+
+  const allPaid = balances.every(b => b <= 0.5);
   const remainingDebt = balances.reduce((s, b) => s + Math.max(0, b), 0);
+
   return {
     totalMonths: allPaid ? months : 0,
-    totalInterest: Math.round(totalInterest * 100) / 100,
+    totalInterest: Math.round(totalInterest),
+    totalPaid: Math.round(totalPaid),
     remainingDebt: Math.round(remainingDebt),
     converged: allPaid,
-    error: allPaid ? null : `Bu stratejiyle borçlar kapanmıyor. Ödeme tutarı aylık faizi karşılamıyor.`
+    totalBudget: Math.round(totalBudget),
+    milestones,
+    monthlySnapshots,
+    debtOrder: names,
+    initialBalances: initBals.map(b => Math.round(b)),
+    error: allPaid ? null : 'Aylık ödeme faizi karşılamıyor, borç büyümeye devam eder.'
   };
 }
 
@@ -1568,11 +1663,12 @@ router.get('/analysis/strategies', (req, res) => {
   const debts = readData('debts');
   const installments = readData('installments');
   const transactions = readData('transactions').filter(t => t.status !== 'rejected');
+  const recurring = readData('recurring');
   const extraPayment = parseFloat(req.query.extraPayment || 0);
 
   if (debts.length === 0) return res.json({ strategies: [] });
 
-  // Calculate available monthly surplus
+  // ── Aylık gelir/gider ortalaması ──────────────────────────
   const monthlyData = {};
   transactions.forEach(t => {
     const d = new Date(t.date);
@@ -1582,55 +1678,89 @@ router.get('/analysis/strategies', (req, res) => {
     else monthlyData[key].expense += t.amount;
   });
   const monthVals = Object.values(monthlyData);
-  const avgSurplus = monthVals.length > 0
-    ? monthVals.reduce((s, m) => s + (m.income - m.expense), 0) / monthVals.length
-    : 0;
+  const avgIncome = monthVals.length > 0
+    ? monthVals.reduce((s, m) => s + m.income, 0) / monthVals.length : 0;
+  const avgExpense = monthVals.length > 0
+    ? monthVals.reduce((s, m) => s + m.expense, 0) / monthVals.length : 0;
+  const avgSurplus = avgIncome - avgExpense;
 
-  const strategies = [
-    { name: 'avalanche', label: 'Avalanche (Yüksek Faiz Önce)', ...calculateStrategy(debts, extraPayment, 'avalanche', installments) },
-    { name: 'snowball', label: 'Snowball (Küçük Borç Önce)', ...calculateStrategy(debts, extraPayment, 'snowball', installments) },
-    { name: 'minimum', label: 'Minimum Ödeme', ...calculateStrategy(debts, 0, 'avalanche', installments) },
-    { name: 'aggressive', label: 'Agresif (Tüm Fazla Borça)', ...calculateStrategy(debts, Math.max(0, avgSurplus), 'avalanche', installments) },
-    { name: 'balanced', label: 'Dengeli (%60 Borç, %40 Tasarruf)', ...calculateStrategy(debts, Math.max(0, avgSurplus * 0.6), 'avalanche', installments) }
-  ];
-
-  strategies.forEach(s => {
-    s.monthlySaved = strategies[2].totalInterest > 0
-      ? Math.round((strategies[2].totalInterest - s.totalInterest) / Math.max(1, s.totalMonths))
-      : 0;
-
-    let extraPaymentAmount = 0;
-    if (s.name === 'avalanche' || s.name === 'snowball') {
-      extraPaymentAmount = extraPayment;
-    } else if (s.name === 'aggressive') {
-      extraPaymentAmount = Math.max(0, avgSurplus);
-    } else if (s.name === 'balanced') {
-      extraPaymentAmount = Math.max(0, avgSurplus * 0.6);
+  // ── Borç detay listesi (her strateji için ortak) ──────────
+  const debtDetails = debts.filter(d => getDebtBalance(d) > 0).map(d => {
+    const bal = getDebtBalance(d);
+    const rate = d.interestRate;
+    const monthlyInterest = Math.round(bal * rate / 100);
+    let minDesc;
+    if (d.type === 'credit_card') {
+      const minRate = d.minPaymentRate || 40;
+      minDesc = `Ekstre bakiyesinin %${minRate}'ı (min ₺200)`;
+    } else if (d.type === 'loan') {
+      minDesc = `Sabit taksit: ${(d.monthlyPayment || 0).toLocaleString('tr-TR')}₺`;
+    } else if (d.type === 'overdraft') {
+      minDesc = `Aylık faiz tutarı: ${monthlyInterest.toLocaleString('tr-TR')}₺`;
+    } else {
+      minDesc = d.minPayment ? `${d.minPayment.toLocaleString('tr-TR')}₺` : 'Belirsiz';
     }
-
-    const debtBreakdownList = debts.filter(d => getDebtBalance(d) > 0).map(d => ({
-      name: d.name,
-      balance: Math.round(getDebtBalance(d)),
-      monthlyRate: d.interestRate,
-      monthlyInterest: Math.round(getDebtBalance(d) * d.interestRate / 100)
-    }));
-
-    s.breakdown = {
-      strategy: s.label,
-      avgMonthlySurplus: Math.round(avgSurplus),
-      monthlyPayment: Math.round(extraPaymentAmount),
-      totalDebts: debtBreakdownList,
-      calculationSteps: [
-        "1. Her ay borçlara minimum ödeme yapılır",
-        "2. Ödeme sonrası bakiye faiz ile artar",
-        "3. Aylık toplam faiz hesaplanır ve biriktirilir",
-        "4. Borçlar kapanıncaya kadar döngü devam eder"
-      ],
-      result: s.converged ? `${s.totalMonths} ayda ${Math.round(s.totalInterest)}₺ faiz ödenecek` : 'Bu stratejiyle borçlar kapanmıyor'
+    return {
+      name: d.name, type: d.type, balance: Math.round(bal),
+      monthlyRate: rate, monthlyInterest, minPaymentDesc: minDesc
     };
   });
 
-  res.json({ strategies, avgMonthlySurplus: Math.round(avgSurplus) });
+  const totalDebt = debtDetails.reduce((s, d) => s + d.balance, 0);
+  const totalMonthlyInterest = debtDetails.reduce((s, d) => s + d.monthlyInterest, 0);
+
+  // ── 5 strateji hesapla ────────────────────────────────────
+  // minimum: cascade kapalı — sadece minimumlar, serbest kalan ödeme aktarılmaz
+  const aggressiveExtra = Math.max(0, avgSurplus);
+  const balancedExtra = Math.max(0, avgSurplus * 0.6);
+
+  const raw = [
+    { name: 'avalanche',  label: 'Avalanche (Yüksek Faiz Önce)',       extra: extraPayment,   strat: 'avalanche', cascade: true },
+    { name: 'snowball',   label: 'Snowball (Küçük Borç Önce)',         extra: extraPayment,   strat: 'snowball',  cascade: true },
+    { name: 'minimum',    label: 'Sadece Minimum Ödeme',               extra: 0,              strat: 'avalanche', cascade: false },
+    { name: 'aggressive', label: 'Agresif (Tüm Fazla Borça)',          extra: aggressiveExtra, strat: 'avalanche', cascade: true },
+    { name: 'balanced',   label: 'Dengeli (%60 Borç, %40 Tasarruf)',   extra: balancedExtra,  strat: 'avalanche', cascade: true }
+  ];
+
+  const strategies = raw.map(r => {
+    const result = calculateStrategy(debts, r.extra, r.strat, installments, r.cascade);
+    return { name: r.name, label: r.label, extra: Math.round(r.extra), ...result };
+  });
+
+  // ── Breakdown oluştur ─────────────────────────────────────
+  const minStrat = strategies.find(s => s.name === 'minimum');
+
+  strategies.forEach(s => {
+    // Faiz tasarrufu (minimuma kıyasla)
+    if (minStrat && minStrat.converged && s.converged) {
+      s.interestSaved = minStrat.totalInterest - s.totalInterest;
+    } else if (s.converged && minStrat && !minStrat.converged) {
+      s.interestSaved = null; // minimum yakınsamıyor, kıyaslama anlamsız
+    } else {
+      s.interestSaved = 0;
+    }
+
+    // Detaylı breakdown
+    s.breakdown = {
+      strategy: s.label,
+      debts: debtDetails,
+      totalDebt,
+      totalMonthlyInterest,
+      extraPayment: s.extra,
+      totalBudget: s.totalBudget,
+      avgIncome: Math.round(avgIncome),
+      avgExpense: Math.round(avgExpense),
+      avgSurplus: Math.round(avgSurplus),
+      milestones: s.milestones || [],
+      monthlySnapshots: s.monthlySnapshots || [],
+      converged: s.converged,
+      totalMonths: s.totalMonths,
+      totalInterest: s.totalInterest,
+      totalPaid: s.totalPaid || 0
+    };
+  });
+
+  res.json({ strategies, avgMonthlySurplus: Math.round(avgSurplus), avgIncome: Math.round(avgIncome) });
 });
 
 // ═══════════════════════════════════════════════════════════════════
