@@ -61,7 +61,7 @@ class SurvivalEngine {
   // ─── S2: Borç Büyüyor Mu? Testi ──────────────────────────────
   debtGrowthTest() {
     return this.debts.map(d => {
-      const monthlyInterest = d.currentBalance * (d.interestRate / 100) / 12;
+      const monthlyInterest = d.currentBalance * (d.interestRate / 100);
       const netChange = d.minPayment - monthlyInterest;
       let status, label;
       if (netChange > 0) { status = 'shrinking'; label = 'Azalıyor'; }
@@ -265,7 +265,7 @@ class SurvivalEngine {
       s + (d.currentBalance / totalDebt) * d.interestRate, 0);
 
     const scenarios = terms.map(months => {
-      const monthlyRate = newInterestRate / 100 / 12;
+      const monthlyRate = newInterestRate / 100;
       const pmt = totalDebt * (monthlyRate * Math.pow(1 + monthlyRate, months)) /
         (Math.pow(1 + monthlyRate, months) - 1);
       const totalPayment = pmt * months + costs;
@@ -326,7 +326,7 @@ class SurvivalEngine {
 
   // ─── Helper methods ───────────────────────────────────────────
   _totalMonthlyInterest() {
-    return this.debts.reduce((s, d) => s + (d.currentBalance * (d.interestRate / 100) / 12), 0);
+    return this.debts.reduce((s, d) => s + (d.currentBalance * (d.interestRate / 100)), 0);
   }
 
   _simulateMinOnly() {
@@ -336,7 +336,7 @@ class SurvivalEngine {
       months++;
       balances = balances.map(b => {
         if (b.bal <= 0) return b;
-        const interest = b.bal * (b.interestRate / 100) / 12;
+        const interest = b.bal * (b.interestRate / 100);
         b.bal = b.bal + interest - b.minPayment;
         if (b.bal < 0) b.bal = 0;
         return b;
@@ -351,7 +351,7 @@ class SurvivalEngine {
       let bal = d.currentBalance;
       let months = 0;
       while (bal > 0 && months < 360) {
-        const interest = bal * (d.interestRate / 100) / 12;
+        const interest = bal * (d.interestRate / 100);
         total += interest;
         bal = bal + interest - d.minPayment;
         if (bal < 0) bal = 0;

@@ -64,8 +64,8 @@ export class DebtManager {
               <div class="debt-balance">${formatCurrency(debt.currentBalance)}</div>
               <div class="debt-meta">
                 <div class="debt-meta-item">
-                  <span class="debt-meta-label">Faiz Oranı</span>
-                  <span class="debt-meta-value">${formatPercentage(debt.interestRate)}</span>
+                  <span class="debt-meta-label">Aylık Faiz</span>
+                  <span class="debt-meta-value">${formatPercentage(debt.interestRate)}/ay</span>
                 </div>
                 <div class="debt-meta-item">
                   <span class="debt-meta-label">Aylık Faiz</span>
@@ -246,7 +246,7 @@ export class DebtManager {
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label">Faiz Oranı (Yıllık %)</label>
+            <label class="form-label">Faiz Oranı (Aylık %)</label>
             <input class="form-input" type="number" name="interestRate" step="0.01" value="0" min="0">
           </div>
         </div>

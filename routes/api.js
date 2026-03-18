@@ -193,10 +193,10 @@ router.post('/debts', (req, res) => {
   const debts = readData('debts');
   const debtType = req.body.type || 'credit_card';
 
-  // Ek hesap default faiz: TCMB aylık %4.25 → yıllık %51 (4.25 × 12)
+  // Ek hesap default faiz: TCMB aylık %4.25
   let defaultInterestRate = 0;
   if (debtType === 'overdraft') {
-    defaultInterestRate = TCMB_OVERDRAFT_MONTHLY_RATE * 12; // %51 yıllık
+    defaultInterestRate = TCMB_OVERDRAFT_MONTHLY_RATE; // Aylık %
   }
 
   const newDebt = {
@@ -205,7 +205,7 @@ router.post('/debts', (req, res) => {
     type: debtType,
     principalAmount: parseFloat(req.body.principalAmount || 0),
     currentBalance: parseFloat(req.body.currentBalance || 0),
-    interestRate: parseFloat(req.body.interestRate || defaultInterestRate), // Annual %
+    interestRate: parseFloat(req.body.interestRate || defaultInterestRate), // Aylık %
     minPayment: parseFloat(req.body.minPayment || 0), // 0 = otomatik hesapla
     tcmbMonthlyRate: debtType === 'overdraft' ? parseFloat(req.body.tcmbMonthlyRate || TCMB_OVERDRAFT_MONTHLY_RATE) : undefined,
     dueDate: req.body.dueDate || null,
@@ -379,7 +379,7 @@ router.get('/summary', (req, res) => {
   const totalIncome = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const totalExpense = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
   const totalDebt = debts.reduce((s, d) => s + d.currentBalance, 0);
-  const totalInterestPerMonth = debts.reduce((s, d) => s + (d.currentBalance * (d.interestRate / 100) / 12), 0);
+  const totalInterestPerMonth = debts.reduce((s, d) => s + (d.currentBalance * (d.interestRate / 100)), 0);
 
   // Monthly obligations: debt min payments + installments + recurring
   const installments = readData('installments');
@@ -487,7 +487,7 @@ router.get('/analysis/debt-payoff', (req, res) => {
   const extraPayment = parseFloat(req.query.extraPayment || 0);
 
   const analysis = debts.map(debt => {
-    const monthlyRate = debt.interestRate / 100 / 12;
+    const monthlyRate = debt.interestRate / 100;
     const balance = debt.currentBalance;
     const effectiveMin = getEffectiveMinPayment(debt);
 
@@ -565,7 +565,7 @@ function calculateStrategy(debts, extraPayment, strategy) {
   }
 
   let balances = sorted.map(d => d.currentBalance);
-  const rates = sorted.map(d => d.interestRate / 100 / 12);
+  const rates = sorted.map(d => d.interestRate / 100);
   const minPayments = sorted.map(d => getEffectiveMinPayment(d));
   let totalInterest = 0;
   let months = 0;
@@ -631,7 +631,7 @@ router.get('/analysis/savings', (req, res) => {
 
   // Weighted average monthly interest across all debts
   const totalMonthlyInterest = debts.reduce((s, d) => {
-    const rate = d.interestRate / 100 / 12;
+    const rate = d.interestRate / 100;
     return s + (d.currentBalance * rate);
   }, 0);
 
@@ -998,7 +998,7 @@ router.get('/recommendations', (req, res) => {
   const totalIncome = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const totalExpense = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
   const totalDebt = debts.reduce((s, d) => s + d.currentBalance, 0);
-  const totalInterest = debts.reduce((s, d) => s + (d.currentBalance * d.interestRate / 100 / 12), 0);
+  const totalInterest = debts.reduce((s, d) => s + (d.currentBalance * d.interestRate / 100), 0);
 
   // Debt-to-income ratio
   const dti = totalIncome > 0 ? (totalDebt / (totalIncome * 12)) * 100 : 0;
@@ -1134,7 +1134,7 @@ router.get('/analytics/ratios', (req, res) => {
   const totalIncome = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const totalExpense = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
   const totalDebt = debts.reduce((s, d) => s + d.currentBalance, 0);
-  const totalInterest = debts.reduce((s, d) => s + (d.currentBalance * d.interestRate / 100 / 12), 0);
+  const totalInterest = debts.reduce((s, d) => s + (d.currentBalance * d.interestRate / 100), 0);
   const fixedObligations = recurring.filter(r => r.isActive && r.type === 'expense')
     .reduce((s, r) => s + r.amount, 0);
 
@@ -1296,10 +1296,10 @@ router.get('/upcoming-payments', (req, res) => {
         detail += ` | TCMB Aylık: %${rate}`;
         if (!debt.minPayment || debt.minPayment === 0) detail += ' (otomatik)';
       } else if (debt.type === 'credit_card') {
-        detail += ` | Faiz: %${debt.interestRate}`;
+        detail += ` | Faiz: %${debt.interestRate}/ay`;
         if (!debt.minPayment || debt.minPayment === 0) detail += ' (ekstre %40)';
       } else {
-        detail += ` | Faiz: %${debt.interestRate}`;
+        detail += ` | Faiz: %${debt.interestRate}/ay`;
       }
 
       upcoming.push({
@@ -1423,7 +1423,7 @@ router.get('/survival/status', (req, res) => {
 router.post('/survival/consolidation-sim', (req, res) => {
   try {
     const engine = buildSurvivalEngine();
-    const { newInterestRate = 36, terms = [12, 24, 36], costs = 0, onlyAboveRate = null } = req.body;
+    const { newInterestRate = 3, terms = [12, 24, 36], costs = 0, onlyAboveRate = null } = req.body;
 
     const sim = engine.consolidationSimulation({ newInterestRate, terms, costs, onlyAboveRate });
     const survival = engine.survivalStatus();
@@ -1673,17 +1673,16 @@ router.get('/finance/interest-info', (req, res) => {
     const results = debts.map(d => {
       let model, info;
       if (d.type === 'credit_card') {
-        model = new DailyCompoundingInterest(d.interestRate);
+        model = new DailyCompoundingInterest(d.interestRate * 12);
         info = model.info();
         info.monthlyInterest = Math.round(model.monthlyInterest(d.currentBalance));
         info.effectiveAnnualCompound = model.effectiveAnnualRate().toFixed(2) + '%';
       } else if (d.type === 'overdraft') {
-        const monthlyRate = d.interestRate / 12;
-        model = new MonthlyCompoundingInterest(monthlyRate);
+        model = new MonthlyCompoundingInterest(d.interestRate);
         info = model.info();
         info.monthlyInterest = Math.round(model.monthlyInterest(d.currentBalance));
       } else {
-        model = new AnnuityLoanModel(d.interestRate, d.remainingMonths || 24, d.currentBalance);
+        model = new AnnuityLoanModel(d.interestRate * 12, d.remainingMonths || 24, d.currentBalance);
         info = model.info();
       }
       return { debtName: d.name, debtType: d.type, balance: d.currentBalance, ...info };
@@ -1710,9 +1709,9 @@ router.get('/finance/cashflow', (req, res) => {
 
     const interestCosts = debts.reduce((s, d) => {
       if (d.type === 'credit_card') {
-        return s + new DailyCompoundingInterest(d.interestRate).monthlyInterest(d.currentBalance);
+        return s + new DailyCompoundingInterest(d.interestRate * 12).monthlyInterest(d.currentBalance);
       }
-      return s + (d.currentBalance * (d.interestRate / 100) / 12);
+      return s + (d.currentBalance * (d.interestRate / 100));
     }, 0);
 
     const result = threeScenarioCashflow({
@@ -1742,7 +1741,7 @@ router.get('/finance/amortization/:debtId', (req, res) => {
     const debts = readData('debts');
     const debt = debts.find(d => d.id === req.params.debtId);
     if (!debt) return res.status(404).json({ error: 'Borç bulunamadı' });
-    const model = new AnnuityLoanModel(debt.interestRate, debt.remainingMonths || 24, debt.currentBalance);
+    const model = new AnnuityLoanModel(debt.interestRate * 12, debt.remainingMonths || 24, debt.currentBalance);
     res.json({ ...model.info(), table: model.amortizationTable() });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

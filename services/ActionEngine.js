@@ -111,9 +111,9 @@ class ActionEngine {
         priority: 'yüksek',
         impact: 9,
         title: `${d.name} borcuna ekstra ödeme yap`,
-        description: `%${d.interestRate} faiz oranıyla en pahalı borcunuz. Ekstra ödeme burada en çok faiz tasarrufu sağlar.`,
+        description: `%${d.interestRate}/ay faiz oranıyla en pahalı borcunuz. Ekstra ödeme burada en çok faiz tasarrufu sağlar.`,
         reason: `Çığ (avalanche) yöntemi: en yüksek faizli borca öncelik verildiğinde toplam faiz yükü minimize edilir.`,
-        potentialSaving: Math.round(d.currentBalance * d.interestRate / 100 * 0.3)
+        potentialSaving: Math.round(d.currentBalance * d.interestRate / 100 * 0.3 * 12)
       });
     }
 

@@ -92,7 +92,7 @@ DELETE /api/debts/:id                 # Borç sil
   "name": "Yapı Kredi Kredi Kartı",
   "type": "kredi-karti | kredi | ek-hesap | diger",
   "balance": 72000,
-  "interestRate": 72,
+  "interestRate": 3.5,       // Aylık faiz oranı (%)
   "minPayment": 8000
 }
 ```

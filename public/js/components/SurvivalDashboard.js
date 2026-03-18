@@ -164,7 +164,7 @@ export class SurvivalDashboard {
   async showConsolidation() {
     this.helpers?.openModal('🏦 Konsolidasyon Simülatörü', '<div class="text-center">Yükleniyor...</div>');
     try {
-      const sim = await api.postConsolidationSim({ newInterestRate: 36, terms: [12, 24, 36], costs: 2000 });
+      const sim = await api.postConsolidationSim({ newInterestRate: 3, terms: [12, 24, 36], costs: 2000 });
       const html = `
         <div style="margin-bottom:var(--space-md)">
           <p><strong>Birleştirilen borç:</strong> ${formatCurrency(sim.consolidatedDebt)} (${sim.debtCount} borç)</p>

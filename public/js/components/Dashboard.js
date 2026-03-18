@@ -248,7 +248,7 @@ export class Dashboard {
     if (debts.length === 0) return '';
 
     const totalDebt = debts.reduce((s, d) => s + d.currentBalance, 0);
-    const totalInterest = debts.reduce((s, d) => s + (d.currentBalance * d.interestRate / 100 / 12), 0);
+    const totalInterest = debts.reduce((s, d) => s + (d.currentBalance * d.interestRate / 100), 0);
 
     return `
       <div class="card mt-lg fade-in">

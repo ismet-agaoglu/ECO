@@ -179,7 +179,7 @@ class OvertimeService {
     }
 
     const allocations = debts.map(d => {
-      const interestSavedPerMonth = Math.min(netGain, d.currentBalance) * (d.interestRate / 100) / 12;
+      const interestSavedPerMonth = Math.min(netGain, d.currentBalance) * (d.interestRate / 100);
       return {
         debtName: d.name,
         debtType: d.type,

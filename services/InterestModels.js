@@ -232,7 +232,7 @@ function threeScenarioCashflow({ income, guaranteedIncome = 0, fixedExpenses, va
 
 // ─── A6: Borç Önceliklendirme Skoru ─────────────────────────────
 function debtPriorityScore(debt, weights = { interest: 0.35, delay: 0.15, pressure: 0.25, psychological: 0.15, critical: 0.10 }) {
-  const interestScore = Math.min(debt.interestRate / 5, 10); // max 50% → 10
+  const interestScore = Math.min(debt.interestRate * 12 / 5, 10); // aylık oran → yıllığa çevir, max 50% → 10
   const delayScore = (debt.daysOverdue || 0) > 0 ? Math.min(debt.daysOverdue / 3, 10) : 0;
   const pressureScore = debt.minPayment > 0 ? Math.min((debt.minPayment / (debt.currentBalance || 1)) * 100, 10) : 0;
   const psychologicalScore = debt.currentBalance < 10000 ? 8 : debt.currentBalance < 30000 ? 5 : 2; // küçük borç → yüksek
