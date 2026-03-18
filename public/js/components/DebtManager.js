@@ -129,10 +129,6 @@ export class DebtManager {
               <span class="debt-meta-label">Aylik Faiz</span>
               <span class="debt-meta-value">${formatPercentage(debt.interestRate)}/ay</span>
             </div>
-            <div class="debt-meta-item">
-              <span class="debt-meta-label">Min. ile Kapanis</span>
-              <span class="debt-meta-value">${formatPayoffMonths(debtAnalysis.minPaymentMonths)}</span>
-            </div>
           </div>
         `;
         break;
@@ -214,10 +210,6 @@ export class DebtManager {
             <div class="debt-meta-item">
               <span class="debt-meta-label">Min. Odeme</span>
               <span class="debt-meta-value">${formatCurrency(minPayment)}</span>
-            </div>
-            <div class="debt-meta-item">
-              <span class="debt-meta-label">Min. ile Kapanis</span>
-              <span class="debt-meta-value">${formatPayoffMonths(debtAnalysis.minPaymentMonths)}</span>
             </div>
           </div>
         `;

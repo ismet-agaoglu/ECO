@@ -548,18 +548,22 @@ router.get('/summary', (req, res) => {
   const budgetLimit = budget ? budget.totalLimit : 0;
   const remainingBudget = budgetLimit > 0 ? budgetLimit - totalExpense : null;
 
+  // Aylık toplam gider = kredili ürün asgari ödemeleri + nakit/sabit giderler (kira vb.)
+  const monthlyTotalExpense = debtMinPayments + recurringPayments + installmentPayments;
+
   res.json({
     year, month,
     totalIncome,
-    totalExpense,
-    net: totalIncome - totalExpense,
+    totalExpense,              // Sadece işlem kayıtlarından gelen harcamalar
+    monthlyTotalExpense: Math.round(monthlyTotalExpense), // Gerçek aylık gider (kredi ödemeleri + sabit)
+    net: totalIncome - monthlyTotalExpense,
     totalDebt,
     totalInterestPerMonth: Math.round(totalInterestPerMonth * 100) / 100,
     totalObligations: Math.round(totalObligations),
     debtMinPayments: Math.round(debtMinPayments),
     installmentPayments: Math.round(installmentPayments),
     recurringPayments: Math.round(recurringPayments),
-    freeIncome: Math.round(totalIncome - totalObligations),
+    freeIncome: Math.round(totalIncome - monthlyTotalExpense),
     budgetLimit,
     remainingBudget,
     transactionCount: monthTx.length
@@ -637,26 +641,31 @@ router.get('/analysis/debt-payoff', (req, res) => {
     const balance = getDebtBalance(debt);
     const effectiveMin = getEffectiveMinPayment(debt, installments);
 
-    // Minimum payment scenario
-    const minScenario = simulatePayoff(balance, monthlyRate, effectiveMin);
-    // Extra payment scenario
+    // Minimum payment scenario — kredi kartı için yüzdesel, diğerleri sabit
+    const minScenario = simulateDebtPayoff(debt, 0, installments);
+    // Extra payment scenario — her zaman sabit ek ödeme
     const extraScenario = extraPayment > 0
-      ? simulatePayoff(balance, monthlyRate, effectiveMin + extraPayment)
+      ? simulateDebtPayoff(debt, extraPayment, installments)
       : null;
 
     return {
       debtId: debt.id,
       name: debt.name,
-      balance: balance,
-      currentBalance: balance, // geriye uyumluluk
+      type: debt.type,
+      balance,
+      currentBalance: balance,
       interestRate: debt.interestRate,
       monthlyInterest: Math.round(balance * monthlyRate * 100) / 100,
       minPayment: effectiveMin,
       minPaymentMonths: minScenario.months,
       minPaymentTotalInterest: minScenario.totalInterest,
+      minPaymentTotalPaid: minScenario.totalPaid,
       extraPaymentMonths: extraScenario ? extraScenario.months : null,
       extraPaymentTotalInterest: extraScenario ? extraScenario.totalInterest : null,
-      interestSaved: extraScenario ? Math.round((minScenario.totalInterest - extraScenario.totalInterest) * 100) / 100 : null
+      extraPaymentTotalPaid: extraScenario ? extraScenario.totalPaid : null,
+      interestSaved: extraScenario && minScenario.totalInterest > 0 && extraScenario.totalInterest > 0
+        ? Math.round(minScenario.totalInterest - extraScenario.totalInterest)
+        : null
     };
   });
 
@@ -667,38 +676,92 @@ router.get('/analysis/debt-payoff', (req, res) => {
   res.json({ debts: analysis, snowball, avalanche });
 });
 
-function simulatePayoff(balance, monthlyRate, payment) {
-  if (balance <= 0) return { months: 0, totalInterest: 0 };
-  if (payment <= 0) return { months: -1, totalInterest: -1, error: 'Ödeme tutarı 0' };
+/**
+ * Sabit ödemeli borç simülasyonu (tüketici kredisi, ek hesap, ek ödeme senaryoları)
+ */
+function simulatePayoffFixed(balance, monthlyRate, payment) {
+  if (balance <= 0) return { months: 0, totalInterest: 0, totalPaid: 0 };
+  if (payment <= 0) return { months: -1, totalInterest: -1, totalPaid: 0, error: 'Ödeme tutarı 0' };
 
-  // İlk ay faizi hesapla — ödeme faizi bile karşılamıyorsa sonsuz döngü
   const firstMonthInterest = balance * monthlyRate;
   if (payment <= firstMonthInterest) {
     return {
-      months: -1,
-      totalInterest: -1,
-      error: `Ödeme (${Math.round(payment).toLocaleString('tr-TR')}₺) aylık faizden (${Math.round(firstMonthInterest).toLocaleString('tr-TR')}₺) düşük — borç asla kapanmaz`
+      months: -1, totalInterest: -1, totalPaid: 0,
+      error: `Ödeme (${Math.round(payment).toLocaleString('tr-TR')}₺) aylık faizden (${Math.round(firstMonthInterest).toLocaleString('tr-TR')}₺) düşük`
     };
   }
 
-  let months = 0;
-  let totalInterest = 0;
-  let remaining = balance;
-  const maxMonths = 360; // max 30 yıl
+  let months = 0, totalInterest = 0, totalPaid = 0, remaining = balance;
+  const maxMonths = 360;
 
-  while (remaining > 0 && months < maxMonths) {
+  while (remaining > 0.5 && months < maxMonths) {
     const interest = remaining * monthlyRate;
     totalInterest += interest;
-    remaining = remaining + interest - payment;
+    const thisPayment = Math.min(payment, remaining + interest);
+    remaining = remaining + interest - thisPayment;
+    totalPaid += thisPayment;
     months++;
-    if (remaining < 0) remaining = 0;
   }
 
-  if (remaining > 0) {
-    return { months: -1, totalInterest: -1, error: `${maxMonths} ayda (30 yıl) bile kapanmıyor` };
+  if (remaining > 0.5) {
+    return { months: -1, totalInterest: -1, totalPaid, error: `${maxMonths} ayda kapanmıyor` };
+  }
+  return { months, totalInterest: Math.round(totalInterest), totalPaid: Math.round(totalPaid) };
+}
+
+/**
+ * Yüzdesel (asgari ödeme) borç simülasyonu — kredi kartı için.
+ * Her ay: ekstre = kalan + faiz → ödeme = ekstre × oran%
+ * Taban tutar: bakiye küçüldüğünde minimum 200₺ (veya kalan bakiyenin tamamı)
+ */
+function simulatePayoffPercentage(balance, monthlyRate, paymentRate, floorPayment) {
+  if (balance <= 0) return { months: 0, totalInterest: 0, totalPaid: 0 };
+  const rate = paymentRate / 100; // örn 40 → 0.40
+  const floor = floorPayment || 200; // minimum taban tutar
+
+  let months = 0, totalInterest = 0, totalPaid = 0, remaining = balance;
+  const maxMonths = 360;
+
+  while (remaining > 0.5 && months < maxMonths) {
+    const interest = remaining * monthlyRate;
+    totalInterest += interest;
+    const statement = remaining + interest;
+    // Ödeme: ekstre × oran VEYA taban tutar, hangisi büyükse
+    // Ama bakiye küçükse bakiyenin tamamını öde
+    const calculated = Math.max(statement * rate, floor);
+    const thisPayment = Math.min(calculated, statement);
+    remaining = statement - thisPayment;
+    totalPaid += thisPayment;
+    months++;
   }
 
-  return { months, totalInterest: Math.round(totalInterest * 100) / 100 };
+  if (remaining > 0.5) {
+    return { months: -1, totalInterest: -1, totalPaid, error: `${maxMonths} ayda kapanmıyor` };
+  }
+  return { months, totalInterest: Math.round(totalInterest), totalPaid: Math.round(totalPaid) };
+}
+
+/**
+ * Genel borç ödeme simülasyonu — borç tipine göre doğru fonksiyonu seçer.
+ * @param {Object} debt - Borç objesi
+ * @param {number} extraPayment - Ek ödeme tutarı (sabit, her ay)
+ * @param {Array} installments - Taksit listesi (KK ekstre hesabı için)
+ */
+function simulateDebtPayoff(debt, extraPayment, installments) {
+  const balance = getDebtBalance(debt);
+  const monthlyRate = debt.interestRate / 100;
+
+  if (balance <= 0) return { months: 0, totalInterest: 0, totalPaid: 0 };
+
+  if (debt.type === 'credit_card' && extraPayment === 0) {
+    // Sadece asgari ödeme senaryosu — yüzdesel hesapla
+    const paymentRate = debt.minPaymentRate || 40;
+    return simulatePayoffPercentage(balance, monthlyRate, paymentRate, 200);
+  } else {
+    // Sabit ödeme senaryosu (ek ödeme var, veya kredi/ek hesap)
+    const effectiveMin = getEffectiveMinPayment(debt, installments);
+    return simulatePayoffFixed(balance, monthlyRate, effectiveMin + extraPayment);
+  }
 }
 
 function calculateStrategy(debts, extraPayment, strategy, installments) {
@@ -713,30 +776,44 @@ function calculateStrategy(debts, extraPayment, strategy, installments) {
 
   let balances = sorted.map(d => getDebtBalance(d));
   const rates = sorted.map(d => d.interestRate / 100);
-  const minPayments = sorted.map(d => getEffectiveMinPayment(d, installments));
+  const types = sorted.map(d => d.type);
+  const paymentRates = sorted.map(d => (d.minPaymentRate || 40) / 100);
+  const fixedPayments = sorted.map(d => {
+    if (d.type === 'credit_card') return 0; // Kredi kartı yüzdesel hesaplanır
+    return getEffectiveMinPayment(d, installments);
+  });
   let totalInterest = 0;
   let months = 0;
 
-  const maxMonths = 360; // max 30 yıl
+  const maxMonths = 360;
+  const floorPayment = 200; // Kredi kartı taban asgari ödeme
 
-  while (balances.some(b => b > 0) && months < maxMonths) {
+  while (balances.some(b => b > 0.5) && months < maxMonths) {
     let extra = extraPayment;
 
     for (let i = 0; i < balances.length; i++) {
-      if (balances[i] <= 0) continue;
+      if (balances[i] <= 0.5) continue;
 
       const interest = balances[i] * rates[i];
       totalInterest += interest;
+      const statement = balances[i] + interest;
 
-      let payment = minPayments[i];
+      // Her ay minimum ödemeyi yeniden hesapla
+      let payment;
+      if (types[i] === 'credit_card') {
+        payment = Math.max(statement * paymentRates[i], floorPayment);
+      } else {
+        payment = fixedPayments[i];
+      }
+
       // Apply extra to first non-zero debt (strategy target)
-      if (extra > 0 && i === balances.findIndex(b => b > 0)) {
+      if (extra > 0 && i === balances.findIndex(b => b > 0.5)) {
         payment += extra;
       }
 
-      balances[i] = balances[i] + interest - payment;
-      if (balances[i] < 0) {
-        // Fazla ödeme kaldıysa sonraki borca aktar (snowball etkisi)
+      payment = Math.min(payment, statement); // Ekstre fazlası ödenmez
+      balances[i] = statement - payment;
+      if (balances[i] < 0.5) {
         extra = Math.abs(balances[i]);
         balances[i] = 0;
       }
