@@ -8,7 +8,7 @@ const CrisisEngine = require('../services/CrisisEngine');
 
 // ─── Data Directory Setup ──────────────────────────────────────────
 const DATA_DIR = path.join(__dirname, '..', 'data');
-const COLLECTIONS = ['transactions', 'debts', 'categories', 'budgets', 'recurring', 'settings', 'installments', 'notes', 'auditlog', 'crisis_transactions'];
+const COLLECTIONS = ['transactions', 'debts', 'categories', 'budgets', 'recurring', 'settings', 'installments', 'notes', 'auditlog', 'crisis_transactions', 'goals', 'snapshots'];
 
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });

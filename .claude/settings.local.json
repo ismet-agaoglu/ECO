@@ -12,7 +12,8 @@
       "Bash(curl -s http://localhost:3000/api/goals)",
       "Bash(curl -s http://localhost:3000/api/notifications)",
       "Bash(curl -s -H \"Authorization: token [REDACTED]\" -X POST https://api.github.com/user/repos -d ...)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(timeout 5 curl -s http://localhost:3000)"
     ]
   }
 }

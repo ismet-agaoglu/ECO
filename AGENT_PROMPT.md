@@ -53,9 +53,18 @@ Body: { "currentAmount": YENİ_MİKTAR }
 POST http://localhost:3000/api/notes
 Body: { "text": "NOT METNİ", "type": "liability|reminder|note", "amount": SAYI }
 
-### Agent Logu
-POST http://localhost:3000/api/agent-log
-Body: { "action": "create|delete|update", "entity": "transaction|debt|goal", "description": "AÇIKLAMA" }
+### Denetim Geçmişi
+GET http://localhost:3000/api/audit-log
+(Audit log otomatik kaydedilir — addAuditLog() ile API işlemlerinde arka planda yazılır, ayrıca POST endpoint'i yoktur)
+
+### Onay Bekleyen İşlemler
+GET http://localhost:3000/api/transactions/pending
+
+### İşlem Onayla
+PUT http://localhost:3000/api/transactions/:id/approve
+
+### İşlem Reddet
+PUT http://localhost:3000/api/transactions/:id/reject
 
 ## Kategoriler
 market, kira, faturalar, ulasim, yemek, saglik, egitim, eglence, giyim, elektronik, akaryakit, cocuk, maas, ek-gelir, yatirim, diger

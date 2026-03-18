@@ -23,7 +23,7 @@ ECO/
 │   ├── recurring.json     # Tekrarlayan harcamalar
 │   ├── notes.json         # Notlar & yükümlülükler
 │   ├── snapshots.json     # Aylık anlık görüntüler
-│   └── agent_log.json     # Agent işlem geçmişi
+│   └── auditlog.json      # Denetim geçmişi (audit log)
 └── public/
     ├── index.html
     ├── css/style.css
@@ -156,15 +156,14 @@ DELETE /api/notes/:id                 # Not sil
 ```
 GET    /api/notifications             # Uyarılar ve bildirimler
 GET    /api/summary?month=3&year=2026 # Aylık özet
-GET    /api/agent-log                 # Agent işlem geçmişi
-POST   /api/agent-log                 # Agent işlemi kaydet
+GET    /api/audit-log                 # Denetim geçmişi (otomatik kaydedilir)
 ```
 
 ### Agent Onay Sistemi
 ```
-GET    /api/agent-pending             # Onay bekleyen işlemler
-POST   /api/agent-approve/:id         # İşlemi onayla
-DELETE /api/agent-reject/:id          # İşlemi reddet
+GET    /api/transactions/pending      # Onay bekleyen işlemler
+PUT    /api/transactions/:id/approve  # İşlemi onayla
+PUT    /api/transactions/:id/reject   # İşlemi reddet
 ```
 
 ## Agent Kullanım Rehberi
@@ -215,7 +214,7 @@ curl http://localhost:3000/api/notifications
 1. `data/` klasöründeki JSON dosyalarını doğrudan düzenleme, her zaman API kullan
 2. Silme işlemlerinde dikkatli ol — geri alma yok
 3. Agent işlemlerini kaydetmek için `source: "agent"` kullan
-4. Büyük miktarlar (>10.000₺) için onay sistemi kullan (`/api/agent-pending`)
+4. Büyük miktarlar (>10.000₺) için onay sistemi kullan (`/api/transactions/pending`)
 5. Tarih formatı her zaman `YYYY-MM-DD`
 6. Para birimleri Türk Lirası (₺), kuruş yok — tam sayı kullan
 

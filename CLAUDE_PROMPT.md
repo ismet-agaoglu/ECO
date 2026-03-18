@@ -10,17 +10,17 @@ Aşağıdaki metni Claude Code'a yapıştır:
 Bu proje bir kişisel/aile finans takip uygulaması (ECO Finance Tracker). Node.js + Express.js + Vanilla JS + JSON dosyaları kullanıyor. `c:\Users\İsmet\Desktop\web\ECO` dizininde.
 
 Sunucu: `node server.js` → http://localhost:3000
-Veri: `data/` klasöründe JSON dosyaları (transactions, debts, recurring, categories, budgets, crisis_transactions)
+Veri: `data/` klasöründe JSON dosyaları (transactions, debts, recurring, categories, budgets, installments, notes, auditlog, crisis_transactions, goals, snapshots, settings)
 Frontend: `public/js/` altında ES module yapısı (app.js → components + services + utils)
 Backend: `routes/api.js` (tüm API endpoint'leri tek dosyada), `services/` altında business logic
 
-## TAMAMLANAN FAZLAR
+## TAMAMLANAN FAZLAR (6/6 — TÜMÜ TAMAMLANDI)
 
 ### Faz 0 — Survival Engine ✅
 - `services/SurvivalEngine.js` — S1-S12: hayatta kalma motoru, borç büyüme testi, break-even, konsolidasyon simülatörü
 - `services/CrisisEngine.js` — S13-S21: kriz likidite, döngü tespiti, karar motoru
 - `public/js/components/SurvivalDashboard.js` — Hayatta Kalma sayfası UI
-- API: /survival/status, /survival/consolidation-sim, /survival/crisis-analysis, /crisis-transactions (CRUD), /survival/cycle-detection
+- API: /survival/status, /survival/consolidation-sim, /survival/sustainability, /survival/crisis-analysis, /survival/cycle-detection, /crisis-transactions (CRUD)
 
 ### Faz 1 — Vergi & Maaş & Ek Mesai ✅
 - `services/TaxService.js` — T1-T7: TR 2026 kümülatif vergi (15/20/27/35/40%), dilim kırılma, maaş projeksiyon, teşvik erimesi, vergi optimizasyonu
@@ -33,16 +33,37 @@ Backend: `routes/api.js` (tüm API endpoint'leri tek dosyada), `services/` altı
 - `services/InterestModels.js` — A1-A6: DailyCompoundingInterest (KK), MonthlyCompoundingInterest (KMH), AnnuityLoanModel (kredi), BSMV %10 + KKDF %15, min ödeme tuzağı sim, 3-senaryo nakit akışı, borç önceliklendirme skoru
 - API: /finance/interest-info, /finance/min-payment-trap, /finance/cashflow, /finance/debt-priority, /finance/amortization/:debtId, /finance/source-types
 
-### Faz 3 — Akıllı Analiz (BACKEND YAZILDI, API+UI EKSİK)
+### Faz 3 — Akıllı Analiz ✅
 - `services/AnalysisEngine.js` — B1-B9: monthly snapshot, net worth, likidite risk, constraint optimization, forecast (linear regression), kategori tahmini, sapma analizi, dönem sonu tahmini, tasarruf potansiyeli
-- ⚠️ Bu servisin API endpoint'leri ve frontend UI'ı henüz yazılmadı!
+- `public/js/components/AnalysisPanel.js` — Akıllı Analiz sayfası UI
+- API: /analysis/snapshot, /analysis/net-worth, /analysis/liquidity-risk, /analysis/constraint-optimization, /analysis/forecast, /analysis/category-forecast, /analysis/deviation, /analysis/end-of-month, /analysis/savings-potential, /analysis/full, /analysis/debt-payoff, /analysis/savings, /analysis/strategies
 
-## KALANLARI YAPILACAKLAR
+### Faz 4 — Davranışsal Finans ✅
+- `services/BehavioralEngine.js` — Harcama pattern, anomali tespiti, what changed panel, financial stress view, maaş erime analizi, risk skoru, günlük limit, Monte Carlo stres testi
+- `public/js/components/BehavioralPanel.js` — Davranışsal Analiz sayfası UI
+- API: /behavioral/patterns, /behavioral/anomalies, /behavioral/what-changed, /behavioral/stress, /behavioral/salary-erosion, /behavioral/risk-score, /behavioral/daily-limit, /behavioral/monte-carlo, /behavioral/full
 
-1. **Faz 3 tamamla**: AnalysisEngine.js için API endpoint'leri + frontend component ekle
-2. **Faz 4 — Davranışsal Finans (8 özellik)**: Harcama pattern, anomali tespiti, what changed panel, financial stress view, maaş erime analizi, risk skoru, günlük limit, Monte Carlo stres testi
-3. **Faz 5 — Agent + Pipeline (11 özellik)**: Duplicate detection, import pipeline, NLP, otomatik kategorizasyon, bildirim sistemi
-4. **Faz 6 — UX & Raporlama (9 özellik)**: Chart.js, takvim, hedef simülasyon, PDF rapor, yıllık karşılaştırma, PWA, responsive
+### Faz 5 — Agent + Pipeline ✅
+- `services/NLPParser.js` — Doğal dil ile işlem girişi
+- `services/ImportPipeline.js` — Banka ekstresi import
+- `services/DuplicateDetector.js` — Tekrar eden işlem tespiti
+- `services/AutoCategorizer.js` — Otomatik kategorizasyon
+- `services/NotificationService.js` — Bildirim sistemi
+- `services/SnapshotService.js` — Aylık anlık görüntüler
+- `services/ActionEngine.js` — Agent aksiyon motoru
+- `public/js/components/ImportPage.js` — Import sayfası UI
+- `public/js/components/AgentActivity.js` — Agent aktivite sayfası UI
+- API: /nlp/parse, /import/process, /import/commit, /duplicate/check, /categorize, /categorize/mappings, /notifications, /snapshots, /snapshots/generate, /snapshots/trend, /actions, /actions/validate-plan, /actions/reverse-goal, /audit-log, /transactions/pending, /transactions/:id/approve, /transactions/:id/reject
+
+### Faz 6 — UX & Raporlama ✅
+- `services/GoalService.js` — Hedef simülasyon ve reverse hesaplama
+- `services/InflationService.js` — Enflasyon etki analizi
+- `services/ReportService.js` — PDF rapor, yıllık karşılaştırma, vergi özeti
+- `public/js/components/GoalsPage.js` — Hedefler sayfası UI
+- `public/js/components/CalendarPage.js` — Takvim sayfası UI
+- `public/js/components/ReportsPage.js` — Raporlar sayfası UI
+- Responsive CSS tamamlandı (768px / 480px breakpoints)
+- API: /goals (CRUD), /goals/simulate/:id, /goals/reverse-calc, /inflation/future-value, /inflation/past-value, /inflation/expense-projection, /inflation/salary-erosion, /reports/yearly-comparison, /reports/tax-summary, /reports/pdf, /calendar
 
 ## ÖNEMLİ KURALLAR
 
@@ -53,9 +74,7 @@ Backend: `routes/api.js` (tüm API endpoint'leri tek dosyada), `services/` altı
 - api.js'deki readData() ve writeData() helper'ları kullan
 - Kullanıcı doktor — SGK/işsizlik detayları gereksiz
 
-Detaylı implementasyon planı: implementation_plan.md dosyasına bak (76 özellik tablo halinde).
-
-Faz 3'ü tamamla (API endpoint'leri + UI), sonra Faz 4'e geç.
+Tüm 6 faz tamamlandı. Yeni özellikler veya iyileştirmeler için bu yapıyı temel al.
 ```
 
 ---
