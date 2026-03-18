@@ -46,6 +46,7 @@ export class Dashboard {
 
   renderStats(summary, budget) {
     const netClass = summary.net >= 0 ? 'positive' : 'negative';
+    const freeClass = summary.freeIncome >= 0 ? 'positive' : 'negative';
     return `
       <div class="stats-grid">
         <div class="card stat-card income fade-in stagger-1">
@@ -59,12 +60,24 @@ export class Dashboard {
           <p class="card-title">Toplam Gider</p>
           <p class="card-value negative">${formatCurrency(summary.totalExpense)}</p>
         </div>
-        <div class="card stat-card net fade-in stagger-3">
+        <div class="card stat-card fade-in stagger-3" style="border-left:3px solid var(--accent-warning)">
+          <div class="stat-icon">📋</div>
+          <p class="card-title">Aylık Yükümlülükler</p>
+          <p class="card-value negative">${formatCurrency(summary.totalObligations || 0)}</p>
+          <p class="card-subtitle">${this.renderObligationBreakdown(summary)}</p>
+        </div>
+        <div class="card stat-card fade-in stagger-4" style="border-left:3px solid ${summary.freeIncome >= 0 ? 'var(--accent-primary)' : 'var(--accent-danger)'}">
+          <div class="stat-icon">🎯</div>
+          <p class="card-title">Serbest Gelir</p>
+          <p class="card-value ${freeClass}">${formatCurrency(summary.freeIncome || 0)}</p>
+          <p class="card-subtitle">Gelir − Yükümlülükler</p>
+        </div>
+        <div class="card stat-card net fade-in stagger-5">
           <div class="stat-icon">📊</div>
           <p class="card-title">Net Durum</p>
           <p class="card-value ${netClass}">${formatCurrency(summary.net)}</p>
         </div>
-        <div class="card stat-card debt fade-in stagger-4">
+        <div class="card stat-card debt fade-in stagger-6">
           <div class="stat-icon">🏦</div>
           <p class="card-title">Toplam Borç</p>
           <p class="card-value negative">${formatCurrency(summary.totalDebt)}</p>
@@ -72,6 +85,14 @@ export class Dashboard {
         </div>
       </div>
     `;
+  }
+
+  renderObligationBreakdown(summary) {
+    const parts = [];
+    if (summary.debtMinPayments > 0) parts.push(`Borç: ${formatCurrency(summary.debtMinPayments)}`);
+    if (summary.installmentPayments > 0) parts.push(`Taksit: ${formatCurrency(summary.installmentPayments)}`);
+    if (summary.recurringPayments > 0) parts.push(`Sabit: ${formatCurrency(summary.recurringPayments)}`);
+    return parts.length > 0 ? parts.join(' · ') : 'Yükümlülük yok';
   }
 
   renderCategoryChart(categories) {
@@ -253,22 +274,54 @@ export class Dashboard {
     if (!upcoming || upcoming.length === 0) return '';
     const total = upcoming.reduce((s, u) => s + u.amount, 0);
 
+    // Group by type
+    const debtPayments = upcoming.filter(u => u.type === 'debt');
+    const installmentPayments = upcoming.filter(u => u.type === 'installment');
+    const recurringPayments = upcoming.filter(u => u.type === 'recurring');
+
     return `
       <div class="card mt-lg fade-in">
         <div class="card-header">
-          <h3 class="card-title">📅 Yaklaşan Ödemeler</h3>
+          <h3 class="card-title">📅 Aylık Ödemeler & Yükümlülükler</h3>
           <span class="tag tag-expense">${formatCurrency(total)}</span>
         </div>
         <div class="recent-list">
-          ${upcoming.map(u => `
-            <div class="recent-item">
-              <div class="recent-info">
-                <div class="recent-desc">${u.type === 'installment' ? '💳' : '🔄'} ${u.name}</div>
-                <div class="recent-date">${u.remaining || u.type === 'recurring' ? 'Aylık' : ''}</div>
+          ${debtPayments.length > 0 ? `
+            <div style="padding:var(--space-xs) var(--space-md);font-size:var(--font-xs);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-top:var(--space-xs)">Borç Ödemeleri</div>
+            ${debtPayments.map(u => `
+              <div class="recent-item">
+                <div class="recent-info">
+                  <div class="recent-desc">${u.name}</div>
+                  <div class="recent-date">${u.detail || ''}</div>
+                </div>
+                <div class="recent-amount amount-expense">-${formatCurrency(u.amount)}</div>
               </div>
-              <div class="recent-amount amount-expense">-${formatCurrency(u.amount)}</div>
-            </div>
-          `).join('')}
+            `).join('')}
+          ` : ''}
+          ${installmentPayments.length > 0 ? `
+            <div style="padding:var(--space-xs) var(--space-md);font-size:var(--font-xs);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-top:var(--space-xs)">Taksitler</div>
+            ${installmentPayments.map(u => `
+              <div class="recent-item">
+                <div class="recent-info">
+                  <div class="recent-desc">💳 ${u.name}</div>
+                  <div class="recent-date">${u.remaining || ''}</div>
+                </div>
+                <div class="recent-amount amount-expense">-${formatCurrency(u.amount)}</div>
+              </div>
+            `).join('')}
+          ` : ''}
+          ${recurringPayments.length > 0 ? `
+            <div style="padding:var(--space-xs) var(--space-md);font-size:var(--font-xs);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-top:var(--space-xs)">Sabit Giderler</div>
+            ${recurringPayments.map(u => `
+              <div class="recent-item">
+                <div class="recent-info">
+                  <div class="recent-desc">🔄 ${u.name}</div>
+                  <div class="recent-date">Aylık</div>
+                </div>
+                <div class="recent-amount amount-expense">-${formatCurrency(u.amount)}</div>
+              </div>
+            `).join('')}
+          ` : ''}
         </div>
       </div>
     `;

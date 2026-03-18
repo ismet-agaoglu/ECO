@@ -339,6 +339,23 @@ router.get('/summary', (req, res) => {
   const totalDebt = debts.reduce((s, d) => s + d.currentBalance, 0);
   const totalInterestPerMonth = debts.reduce((s, d) => s + (d.currentBalance * (d.interestRate / 100) / 12), 0);
 
+  // Monthly obligations: debt min payments + installments + recurring
+  const installments = readData('installments');
+  const recurring = readData('recurring');
+
+  const debtMinPayments = debts.filter(d => d.currentBalance > 0 && d.minPayment > 0).reduce((s, d) => s + d.minPayment, 0);
+  const installmentPayments = installments.filter(i => i.isActive && (i.installmentCount - i.paidCount) > 0).reduce((s, i) => s + i.monthlyAmount, 0);
+  const recurringPayments = recurring.filter(r => {
+    if (!r.isActive) return false;
+    let endMonth = r.startMonth + r.durationMonths - 1;
+    let endYear = r.startYear;
+    while (endMonth > 12) { endMonth -= 12; endYear++; }
+    return (year > r.startYear || (year === r.startYear && month >= r.startMonth)) &&
+           (year < endYear || (year === endYear && month <= endMonth));
+  }).reduce((s, r) => s + r.amount, 0);
+
+  const totalObligations = debtMinPayments + installmentPayments + recurringPayments;
+
   const budgets = readData('budgets');
   const budget = budgets.find(b => b.year === year && b.month === month);
   const budgetLimit = budget ? budget.totalLimit : 0;
@@ -351,6 +368,11 @@ router.get('/summary', (req, res) => {
     net: totalIncome - totalExpense,
     totalDebt,
     totalInterestPerMonth: Math.round(totalInterestPerMonth * 100) / 100,
+    totalObligations: Math.round(totalObligations),
+    debtMinPayments: Math.round(debtMinPayments),
+    installmentPayments: Math.round(installmentPayments),
+    recurringPayments: Math.round(recurringPayments),
+    freeIncome: Math.round(totalIncome - totalObligations),
     budgetLimit,
     remainingBudget,
     transactionCount: monthTx.length
@@ -1131,6 +1153,32 @@ router.get('/upcoming-payments', (req, res) => {
       });
     }
   });
+
+  // Debt minimum payments (credit cards, overdrafts, loans)
+  const debts = readData('debts');
+  debts.forEach(debt => {
+    if (debt.currentBalance > 0 && debt.minPayment > 0) {
+      const typeLabels = {
+        'credit_card': '💳 Kredi Kartı',
+        'overdraft': '🏦 Ek Hesap',
+        'loan': '📋 Tüketici Kredisi',
+        'installment': '💰 Kredi Taksit'
+      };
+      const label = typeLabels[debt.type] || '💰 Borç';
+      upcoming.push({
+        type: 'debt',
+        debtType: debt.type,
+        name: `${label}: ${debt.name}`,
+        amount: debt.minPayment,
+        category: 'debt-payment',
+        dueDate: debt.dueDate ? `${year}-${String(month).padStart(2, '0')}-${String(debt.dueDate).padStart(2, '0')}` : `${year}-${String(month).padStart(2, '0')}-01`,
+        detail: `Bakiye: ${debt.currentBalance.toLocaleString('tr-TR')}₺ | Faiz: %${debt.interestRate}`
+      });
+    }
+  });
+
+  // Sort by due date
+  upcoming.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 
   res.json(upcoming);
 });
