@@ -73,14 +73,16 @@ export class DebtManager {
                 </div>
                 <div class="debt-meta-item">
                   <span class="debt-meta-label">Min. Ödeme</span>
-                  <span class="debt-meta-value">${formatCurrency(debt.minPayment)}</span>
+                  <span class="debt-meta-value">${formatCurrency(debtAnalysis.minPayment)}</span>
                 </div>
                 <div class="debt-meta-item">
                   <span class="debt-meta-label">Min. ile Kapanış</span>
                   <span class="debt-meta-value">${
-                    debtAnalysis.minPaymentMonths === Infinity || !debtAnalysis.minPaymentMonths
-                      ? '∞'
-                      : debtAnalysis.minPaymentMonths + ' ay'
+                    debtAnalysis.minPaymentMonths <= 0 || debtAnalysis.minPaymentMonths === Infinity || !debtAnalysis.minPaymentMonths
+                      ? `<span style="color:var(--accent-danger)" title="${debtAnalysis.error || 'Hesaplanamıyor'}">⚠️ Kapanmaz</span>`
+                      : debtAnalysis.minPaymentMonths <= 12
+                        ? debtAnalysis.minPaymentMonths + ' ay'
+                        : Math.floor(debtAnalysis.minPaymentMonths / 12) + ' yıl ' + (debtAnalysis.minPaymentMonths % 12) + ' ay'
                   }</span>
                 </div>
               </div>
@@ -98,7 +100,30 @@ export class DebtManager {
     if (!analysis.debts || analysis.debts.length === 0) return '';
 
     const { snowball, avalanche } = analysis;
-    const bestStrategy = avalanche.totalInterest <= snowball.totalInterest ? 'avalanche' : 'snowball';
+
+    // Her iki strateji de -1 dönüyorsa (borçlar kapanmıyor)
+    const snowballOk = snowball.totalMonths > 0;
+    const avalancheOk = avalanche.totalMonths > 0;
+
+    if (!snowballOk && !avalancheOk) {
+      return `
+        <div class="section-header mt-lg">
+          <h2 class="section-title">Ödeme Stratejileri</h2>
+        </div>
+        <div class="card fade-in" style="border-left:3px solid var(--accent-danger)">
+          <h3 class="card-title" style="color:var(--accent-danger)">⚠️ Mevcut ödemelerle borçlar kapanmıyor</h3>
+          <p class="card-subtitle">Minimum ödemeler aylık faizi karşılamıyor. Ek ödeme yapılmazsa borç büyümeye devam eder. Aşağıdaki simülatörle farklı ek ödeme tutarlarını deneyin.</p>
+        </div>
+      `;
+    }
+
+    const bestStrategy = (!avalancheOk || (snowballOk && snowball.totalInterest < avalanche.totalInterest)) ? 'snowball' : 'avalanche';
+
+    const formatMonths = (m) => {
+      if (m <= 0) return '<span style="color:var(--accent-danger)">Kapanmaz</span>';
+      if (m <= 12) return m + ' ay';
+      return Math.floor(m / 12) + ' yıl ' + (m % 12) + ' ay';
+    };
 
     return `
       <div class="section-header mt-lg">
@@ -114,11 +139,11 @@ export class DebtManager {
           <div class="debt-meta" style="border-top:none;padding-top:0">
             <div class="debt-meta-item">
               <span class="debt-meta-label">Toplam Süre</span>
-              <span class="debt-meta-value">${snowball.totalMonths} ay</span>
+              <span class="debt-meta-value">${formatMonths(snowball.totalMonths)}</span>
             </div>
             <div class="debt-meta-item">
               <span class="debt-meta-label">Toplam Faiz</span>
-              <span class="debt-meta-value" style="color:var(--accent-danger)">${formatCurrency(snowball.totalInterest)}</span>
+              <span class="debt-meta-value" style="color:var(--accent-danger)">${snowballOk ? formatCurrency(snowball.totalInterest) : '—'}</span>
             </div>
           </div>
         </div>
@@ -131,11 +156,11 @@ export class DebtManager {
           <div class="debt-meta" style="border-top:none;padding-top:0">
             <div class="debt-meta-item">
               <span class="debt-meta-label">Toplam Süre</span>
-              <span class="debt-meta-value">${avalanche.totalMonths} ay</span>
+              <span class="debt-meta-value">${formatMonths(avalanche.totalMonths)}</span>
             </div>
             <div class="debt-meta-item">
               <span class="debt-meta-label">Toplam Faiz</span>
-              <span class="debt-meta-value" style="color:var(--accent-danger)">${formatCurrency(avalanche.totalInterest)}</span>
+              <span class="debt-meta-value" style="color:var(--accent-danger)">${avalancheOk ? formatCurrency(avalanche.totalInterest) : '—'}</span>
             </div>
           </div>
         </div>

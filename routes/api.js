@@ -489,12 +489,13 @@ router.get('/analysis/debt-payoff', (req, res) => {
   const analysis = debts.map(debt => {
     const monthlyRate = debt.interestRate / 100 / 12;
     const balance = debt.currentBalance;
+    const effectiveMin = getEffectiveMinPayment(debt);
 
     // Minimum payment scenario
-    const minScenario = simulatePayoff(balance, monthlyRate, debt.minPayment);
+    const minScenario = simulatePayoff(balance, monthlyRate, effectiveMin);
     // Extra payment scenario
     const extraScenario = extraPayment > 0
-      ? simulatePayoff(balance, monthlyRate, debt.minPayment + extraPayment)
+      ? simulatePayoff(balance, monthlyRate, effectiveMin + extraPayment)
       : null;
 
     return {
@@ -503,7 +504,7 @@ router.get('/analysis/debt-payoff', (req, res) => {
       currentBalance: balance,
       interestRate: debt.interestRate,
       monthlyInterest: Math.round(balance * monthlyRate * 100) / 100,
-      minPayment: debt.minPayment,
+      minPayment: effectiveMin,
       minPaymentMonths: minScenario.months,
       minPaymentTotalInterest: minScenario.totalInterest,
       extraPaymentMonths: extraScenario ? extraScenario.months : null,
@@ -520,20 +521,34 @@ router.get('/analysis/debt-payoff', (req, res) => {
 });
 
 function simulatePayoff(balance, monthlyRate, payment) {
-  if (payment <= 0 || balance <= 0) return { months: 0, totalInterest: 0 };
+  if (balance <= 0) return { months: 0, totalInterest: 0 };
+  if (payment <= 0) return { months: -1, totalInterest: -1, error: 'Ödeme tutarı 0' };
+
+  // İlk ay faizi hesapla — ödeme faizi bile karşılamıyorsa sonsuz döngü
+  const firstMonthInterest = balance * monthlyRate;
+  if (payment <= firstMonthInterest) {
+    return {
+      months: -1,
+      totalInterest: -1,
+      error: `Ödeme (${Math.round(payment).toLocaleString('tr-TR')}₺) aylık faizden (${Math.round(firstMonthInterest).toLocaleString('tr-TR')}₺) düşük — borç asla kapanmaz`
+    };
+  }
+
   let months = 0;
   let totalInterest = 0;
   let remaining = balance;
+  const maxMonths = 360; // max 30 yıl
 
-  while (remaining > 0 && months < 600) {
+  while (remaining > 0 && months < maxMonths) {
     const interest = remaining * monthlyRate;
     totalInterest += interest;
     remaining = remaining + interest - payment;
     months++;
     if (remaining < 0) remaining = 0;
-    if (payment <= interest && months > 1) {
-      return { months: Infinity, totalInterest: Infinity };
-    }
+  }
+
+  if (remaining > 0) {
+    return { months: -1, totalInterest: -1, error: `${maxMonths} ayda (30 yıl) bile kapanmıyor` };
   }
 
   return { months, totalInterest: Math.round(totalInterest * 100) / 100 };
@@ -551,11 +566,13 @@ function calculateStrategy(debts, extraPayment, strategy) {
 
   let balances = sorted.map(d => d.currentBalance);
   const rates = sorted.map(d => d.interestRate / 100 / 12);
-  const minPayments = sorted.map(d => d.minPayment);
+  const minPayments = sorted.map(d => getEffectiveMinPayment(d));
   let totalInterest = 0;
   let months = 0;
 
-  while (balances.some(b => b > 0) && months < 600) {
+  const maxMonths = 360; // max 30 yıl
+
+  while (balances.some(b => b > 0) && months < maxMonths) {
     let extra = extraPayment;
 
     for (let i = 0; i < balances.length; i++) {
@@ -565,18 +582,27 @@ function calculateStrategy(debts, extraPayment, strategy) {
       totalInterest += interest;
 
       let payment = minPayments[i];
-      // Apply extra to first non-zero debt
+      // Apply extra to first non-zero debt (strategy target)
       if (extra > 0 && i === balances.findIndex(b => b > 0)) {
         payment += extra;
       }
 
       balances[i] = balances[i] + interest - payment;
-      if (balances[i] < 0) balances[i] = 0;
+      if (balances[i] < 0) {
+        // Fazla ödeme kaldıysa sonraki borca aktar (snowball etkisi)
+        extra = Math.abs(balances[i]);
+        balances[i] = 0;
+      }
     }
     months++;
   }
 
-  return { totalMonths: months, totalInterest: Math.round(totalInterest * 100) / 100 };
+  const allPaid = balances.every(b => b <= 0);
+  return {
+    totalMonths: allPaid ? months : -1,
+    totalInterest: allPaid ? Math.round(totalInterest * 100) / 100 : -1,
+    error: allPaid ? null : `${maxMonths} ayda (30 yıl) kapanmıyor`
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════
