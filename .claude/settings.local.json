@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \":*)",
+      "Bash(node -e \"require\\(''./routes/api''\\); console.log\\(''Router loaded OK''\\);\")",
+      "Bash(timeout 5 node server.js)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(npm install:*)",
+      "Bash(\"C:\\\\Users\\\\İsmet\\\\Desktop\\\\web\\\\ECO\\\\data\\\\goals.json\")",
+      "Bash(\"C:\\\\Users\\\\İsmet\\\\Desktop\\\\web\\\\ECO\\\\data\\\\snapshots.json\")",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(curl -s http://localhost:3000/api/goals)",
+      "Bash(curl -s http://localhost:3000/api/notifications)"
+    ]
+  }
+}
